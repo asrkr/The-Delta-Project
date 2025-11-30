@@ -57,7 +57,7 @@ def update_database(start_year=2019, end_year=2025):
             time.sleep(0.5)
     if all_races:
         df_final = pd.concat(all_races, ignore_index=True)
-        df_final.to_csv(CSV_PATH, index=False)
+        df_final.to_csv(RESULTS_CSV_PATH, index=False)
         print(f"Base de données sauvegardée dans : {RESULTS_CSV_PATH}")
     else:
         print("Aucune donnée récupérée.")
@@ -93,14 +93,14 @@ def update_calendar(start_year=2019, end_year=2025):
 # Partie 3 : chargement des donnée
 def load_data():
     # On charge le CSV s'il existe, sinon on propose de le télécharger
-    if os.path.exists(CSV_PATH):
-        return pd.read_csv(CSV_PATH)
+    if os.path.exists(RESULTS_CSV_PATH):
+        return pd.read_csv(RESULTS_CSV_PATH)
     else:
         print("Fichier de donnée introuvable.")
         response = input("Voulez-vous le télécharger maintenant ? (o/n)")
         if response.lower() == "o":
             update_database()
-            return pd.read_csv(CSV_PATH)
+            return pd.read_csv(RESULTS_CSV_PATH)
         else:
             return None
 
@@ -115,5 +115,7 @@ def get_rounds_for_race(race_name_keyword):
     if filtered.empty:
         print(f'Aucune course trouvée avec le nom "{race_name_keyword}".')
         return {}
-    # on créé le dictionnaire final
-    return dict(zip(filtered["year"], filtered["round"]))
+    # on créé le dictionnaire final (nom du GP + calendrier dans la saison)
+    official_name = filtered.iloc[0]["raceName"]
+    rounds_map = dict(zip(filtered["year"], filtered["round"]))
+    return rounds_map, official_name
