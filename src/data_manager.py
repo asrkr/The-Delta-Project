@@ -15,27 +15,42 @@ if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
 
-# fonction interne (anciennement get_race_data)
+# fonction interne (anciennement get_race_data) - téléchargement des données avec insistance
 def _fetch_race_result(url):
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            races = data["MRData"]["RaceTable"]["Races"]
-            if not races:
-                return "END_OF_SEASON"
-            # extraction et nettoyage des données
-            df = pd.DataFrame(races[0]["Results"])
-            df["DriverName"] = df["Driver"].apply(lambda x: x["familyName"])
-            df["Team"] = df["Constructor"].apply(lambda x: x["name"])
-            df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
-            df["position"] = pd.to_numeric(df["position"], errors="coerce")
-            # on garde uniquement les colonnes nécessaires
-            cols = ["DriverName", "Team", "grid", "position", "status"]
-            return df[cols]
-    except Exception as e:
-        print(f"Erreur technique : {e}")
-    return None
+    max_retries = 4
+    attempt = 0
+    while attempt < max_retries:
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                races = data["MRData"]["RaceTable"]["Races"]
+                if not races:
+                    return "END_OF_SEASON"
+                # extraction et nettoyage des données
+                df = pd.DataFrame(races[0]["Results"])
+                df["DriverName"] = df["Driver"].apply(lambda x: x["familyName"])
+                df["Team"] = df["Constructor"].apply(lambda x: x["name"])
+                df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
+                df["position"] = pd.to_numeric(df["position"], errors="coerce")
+                # on garde uniquement les colonnes nécessaires
+                cols = ["DriverName", "Team", "grid", "position", "status"]
+                return df[cols]
+            elif response.status_code == 429:
+                wait_time = (attempt + 1) * 5
+                print(f"Trop de requêtes (429). Pause de {wait_time}s...")
+                time.sleep(wait_time)
+                attempt += 1
+                continue
+            else:
+                print(f"Erreur serveur : {response.status_code}. Tentative {attempt+1}/{max_retries}")
+                time.sleep(2)
+                attempt += 1
+        except Exception as e:
+            print(f"Erreur technique : {e}")
+        # échec complet après les essais
+        print(f"Abandon définitif sur : {url}")
+        return None
 
 
 #  Partie 1 : télécharge les résultats, update le csv, et permet de filtrer les données qu'on veut par saison et course
@@ -54,11 +69,12 @@ def update_database(start_year=2019, end_year=2025):
                 result["year"] = year
                 result["round"] = round_num
                 all_races.append(result)
-            time.sleep(0.5)
+            # pause pour le serveur
+            time.sleep(1)
     if all_races:
         df_final = pd.concat(all_races, ignore_index=True)
         df_final.to_csv(RESULTS_CSV_PATH, index=False)
-        print(f"Base de données sauvegardée dans : {RESULTS_CSV_PATH}")
+        print(f"Base de données sauvegardée dans : {RESULTS_CSV_PATH} ({len(df_final)} lignes)")
     else:
         print("Aucune donnée récupérée.")
 
@@ -85,6 +101,8 @@ def update_calendar(start_year=2019, end_year=2025):
             print(f"  -> Saison {year} : OK")
         except Exception as e:
             print(f"  Erreur {year} : {e}")
+        # pause for the server
+        time.sleep(1)
     df_calendar = pd.DataFrame(all_schedules)
     df_calendar.to_csv(CALENDAR_CSV_PATH, index=False)
     print(f"Calendrier enregistré dans : {CALENDAR_CSV_PATH}")
@@ -97,9 +115,10 @@ def load_data():
         return pd.read_csv(RESULTS_CSV_PATH)
     else:
         print("Fichier de donnée introuvable.")
-        response = input("Voulez-vous le télécharger maintenant ? (o/n)")
+        response = input("Voulez-vous le télécharger maintenant ? (o/n) ")
         if response.lower() == "o":
             update_database()
+            time.sleep(5)  # pour laisser souffler le serveur entre les données et le calendrier
             return pd.read_csv(RESULTS_CSV_PATH)
         else:
             return None
