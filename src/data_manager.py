@@ -37,7 +37,7 @@ def _fetch_race_result(url):
                 df["position"] = pd.to_numeric(df["position"], errors="coerce")
                 
                 # Filtrage des colonnes existantes
-                cols_ok = ["DriverName", "Team", "grid", "position", "status"]
+                cols_ok = ["DriverName", "Team", "grid", "position", "status", "points"]
                 final_cols = [c for c in cols_ok if c in df.columns]
                 return df[final_cols]
 

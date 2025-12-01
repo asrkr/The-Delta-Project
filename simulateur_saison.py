@@ -1,7 +1,7 @@
 import pandas as pd
 from src.data_manager import load_data
-# on importe les fonctions de notre ml_model pour ne pas répéter le code
-from src.ml_model import encode_data, train_models, predict_race_outcome
+# AJOUT : On importe add_dual_form ici
+from src.ml_model import encode_data, train_models, predict_race_outcome, add_dual_form
 
 def run_simulation(season_to_simulate, use_real_grid=False):
     mode = "VRAIE GRILLE" if use_real_grid else "GRILLE PRÉDITE"
@@ -10,7 +10,12 @@ def run_simulation(season_to_simulate, use_real_grid=False):
     df = load_data()
     if df is None: return
 
-    # encodage via la fonction partagée
+    # --- CORRECTION ICI ---
+    # On doit d'abord calculer les formes (points/positions récentes)
+    # avant de nettoyer les données, sinon l'IA ne trouve pas ses colonnes !
+    df = add_dual_form(df)
+
+    # Ensuite on encode
     df_clean, le_driver, le_team = encode_data(df)
 
     races = df[df['year'] == season_to_simulate].sort_values('round')['round'].unique()
@@ -24,7 +29,7 @@ def run_simulation(season_to_simulate, use_real_grid=False):
     for race_round in races:
         print(f"\nRound {race_round}, vainqueur prédit : ", end="")
         
-        # entraînement
+        # entraînement sur le passé
         mask_train = (df_clean['year'] < season_to_simulate) | \
                      ((df_clean['year'] == season_to_simulate) & (df_clean['round'] < race_round))
         train_data = df_clean[mask_train]
@@ -33,25 +38,27 @@ def run_simulation(season_to_simulate, use_real_grid=False):
             print(".", end="")
             continue
 
-        # appel fonction entraînement
+        # on entraîne les modèles via la fonction partagée
         models = train_models(train_data)
 
-        # réalité
+        # réalité du jour
         current_race = df_clean[(df_clean['year'] == season_to_simulate) & (df_clean['round'] == race_round)]
         if current_race.empty: continue
 
-        # appel fonction prédiction
-        results = predict_race_outcome(models, current_race, season_to_simulate, le_driver, le_team, use_real_grid)
+        # prédiction via la fonction partagée
+        # ATTENTION : On passe 'df' (le complet avec historique) pour récupérer les formes
+        results = predict_race_outcome(models, current_race, season_to_simulate, race_round, le_driver, le_team, df, use_real_grid)
         
-        # analyse
+        # analyse des résultats
         results = results.merge(current_race[['DriverName', 'position']], left_on='Pilote', right_on='DriverName')
         results = results.sort_values('Course_Score')
         results['Pred_Pos'] = range(1, len(results) + 1)
         
-        # métriques
+        # calcul MAE
         mae = abs(results['Pred_Pos'] - results['position']).mean()
         stats['mae'].append(mae)
         
+        # vainqueur
         winner_pred = results.iloc[0]['Pilote']
         winner_real = current_race.sort_values('position').iloc[0]['DriverName']
         
@@ -61,7 +68,7 @@ def run_simulation(season_to_simulate, use_real_grid=False):
         else:
             print("❌", end="")
 
-        # précision stricte
+        # calcul de précision stricte (ordre exact)
         def get_strict_acc(n):
             top_ia = results.head(n)['Pilote'].tolist()
             top_real = current_race.sort_values('position').head(n)['DriverName'].tolist()
@@ -73,7 +80,7 @@ def run_simulation(season_to_simulate, use_real_grid=False):
         stats['top10'].append(get_strict_acc(10))
         stats['total'] += 1
 
-    # bilan
+    # bilan final
     if stats['total'] > 0:
         nb = stats['total']
         print(f"\n\n📊 BILAN {season_to_simulate}")
@@ -81,7 +88,7 @@ def run_simulation(season_to_simulate, use_real_grid=False):
         print(f"Top 3 (Strict) : {sum(stats['top3'])/nb:.1f}%")
         print(f"Top 5 (Strict) : {sum(stats['top5'])/nb:.1f}%")
         print(f"Top 10 (Strict) : {sum(stats['top10'])/nb:.1f}%")
-        print(f"📉 Écart Moyen : {sum(stats['mae'])/nb:.2f} places") 
+        print(f"MAE : {sum(stats['mae'])/nb:.2f}")
 
 if __name__ == "__main__":
     annee = int(input("Saison : "))
