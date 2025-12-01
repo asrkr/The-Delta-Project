@@ -120,5 +120,5 @@ def analyze_driver_career(df, target_year):
     ]
     # calculs
     stats = df_clean.groupby("DriverName")[["position"]].mean()
-    stats.rename(columns={"positions": "career_positions"}, inplace=True)
+    stats.rename(columns={"position": "career_positions"}, inplace=True)
     return stats
