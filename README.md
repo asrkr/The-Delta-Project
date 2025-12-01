@@ -1,61 +1,126 @@
 # 🏎️ The Delta Project
 
-![Python](https://img.shields.io/badge/Python-3.13.7-blue?style=flat&logo=python)
-![Machine Learning](https://img.shields.io/badge/AI-RandomForest-green?style=flat&logo=scikit-learn)
+![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat&logo=python)
+![Machine
+Learning](https://img.shields.io/badge/AI-RandomForest-green?style=flat&logo=scikit-learn)
 ![Status](https://img.shields.io/badge/Status-V1.3_Stable-orange)
 
-**The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
+## Overview
 
-This project leverages historical data (scraped from 2001) and Machine Learning algorithms (**Random Forest**) to simulate a full race weekend: from the qualifying session down to the chequered flag.
+**The Delta Project** is a professional-grade Artificial Intelligence
+engine designed to predict Formula 1 race results using historical data,
+advanced preprocessing, and machine learning models.
 
----
+This system simulates an entire race weekend---from qualifying to the
+chequered flag---leveraging a Random Forest pipeline trained on over two
+decades of Formula 1 history.
 
-## 🏛️ Origin of the Name
+------------------------------------------------------------------------
 
-Why **The Delta Project**?
+## ✨ Features
 
-The concept started with the idea of building an **Oracle** to predict race outcomes. However, since "Oracle" is already quite busy winning championships in F1, we turned to the most famous oracle of antiquity: the **Oracle of Delphi**.
+-   **Automated Data Pipeline**\
+    Incremental extraction, cleaning, and caching of race data
+    (2001--present).
 
-The Greek initial for Delphi is **Delta** ($\Delta$). It fits perfectly as a double entendre: a nod to the Oracle and the mathematical symbol for *difference*, the core of F1 telemetry.
+-   **Two-Stage Machine Learning Architecture**
 
----
+    -   *Qualifying Model* --- Predicts starting grid.\
+    -   *Race Model* --- Predicts final classification using simulated
+        or real grid.
 
-## 🚀 Key Features
+-   **Season Simulator (Backtesting)**
 
-* **Smart Data Pipeline:** Incremental downloading and cleaning of data from the 2001 season to the present day (via Jolpica/Ergast API).
-* **"Dual Brain" Architecture:** Two distinct models working in a chain:
-    1.  **Qualifying Model:** Predicts the starting grid based on driver, team, and year.
-    2.  **Race Model:** Predicts the final result using the grid (real or simulated).
-* **Advanced Backtesting:** Full season simulator with scenario comparison:
-    * *Oracle Mode:* The AI guesses everything (Quali + Race).
-    * *Analyst Mode:* The AI uses the real starting grid (isolates race performance).
-* **Dynamic Management:** Automatic detection of participants (historical Entry List) and handling of transfers/rookies for future seasons (2025).
+    -   *Oracle Mode*: AI predicts quali + race.\
+    -   *Analyst Mode*: AI uses real grids to isolate race performance.
 
----
+-   **Intelligent Driver & Team Management**\
+    Automatic handling of rookies, transfers, and multi-team seasons.
 
-## 🛠️ Tech Stack
-
-* **Language:** Python 3.13.7
-* **Data Manipulation:** Pandas, NumPy
-* **Machine Learning:** Scikit-learn (RandomForestRegressor, LabelEncoder)
-* **Data Collection:** Requests (REST API)
-
----
+------------------------------------------------------------------------
 
 ## 📂 Project Structure
 
-```text
+``` text
 The-Delta-Project/
 │
-├── data/                      # CSV Storage (ignored by Git)
-│   ├── f1_data_complete.csv   # Historical Database (2001-2025)
-│   └── races_calendar.csv     # Official Calendar
+├── data/                      # Local dataset storage
+│   ├── f1_data_complete.csv
+│   └── races_calendar.csv
 │
-├── src/                       # Source Code
-│   ├── data_manager.py        # ETL Pipeline (Extract, Transform, Load)
-│   ├── ml_model.py            # AI Brain (Training & Prediction)
-│   └── analysis.py            # Exploratory Data Analysis (Data Viz)
+├── src/
+│   ├── data_manager.py        # ETL pipeline
+│   ├── ml_model.py            # ML logic
+│   └── analysis.py            # Analytics & visualisations
 │
-├── main.py                    # Main Script (Single Race Prediction)
-├── simulateur_saison.py       # Backtesting Script (Full Season Simulation)
-└── README.md                  # Documentation
+├── main.py                    # Single-race prediction script
+├── simulateur_saison.py       # Backtesting engine
+└── README.md
+```
+
+------------------------------------------------------------------------
+
+## ⚡ Installation
+
+### Install dependencies
+
+``` bash
+pip install pandas numpy scikit-learn requests seaborn matplotlib
+```
+
+### Initialize dataset
+
+``` bash
+python src/data_manager.py
+# Choose option 2 (full 2001–2025 history)
+```
+
+### Run a prediction
+
+``` bash
+python main.py
+```
+
+### Run a season simulation
+
+``` bash
+python simulateur_saison.py
+```
+
+------------------------------------------------------------------------
+
+## 🗺 Roadmap
+
+### ✔ Phase 1 --- Foundations (V1.3)
+
+-   Robust data ingestion
+-   ML pipeline (Random Forest)
+-   Driver transfer logic
+-   Quality metrics (MAE, accuracy)
+
+### 🚧 Phase 2 --- Intelligence Layer (V1.5)
+
+-   Driver recent form (rolling windows)
+-   Track-dependent quali bias
+-   Career progression model
+
+### 🔮 Phase 3 --- Strategy Layer (V2.0)
+
+-   Weather modelling
+-   Pitstop strategy integration
+-   Sprint race support
+
+------------------------------------------------------------------------
+
+## 📊 Current Performance (2024)
+
+-   **Winner Accuracy:** \~35--40%\
+-   **Top 10 Accuracy:** \~65%\
+-   **MAE:** \~3.5 positions
+
+------------------------------------------------------------------------
+
+## 👨‍💻 Author
+
+Developed by an engineering student passionate about **AI**, **Data
+Science**, and **Formula 1**.
