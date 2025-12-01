@@ -4,7 +4,11 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 
 
-def train_and_predict(df, target_year, target_round, gp_name):
+def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=False):
+    # Affichage du mode (pour que tu saches ce qui se passe)
+    mode_str = "VRAIE GRILLE (Si dispo)" if use_real_grid else "GRILLE PRÉDITE (Full IA)"
+    print(f"\n--- MACHINE LEARNING : {gp_name} ({target_year}) ---")
+    print(f"⚙️  Mode : {mode_str}")
 
     # on prend les données des pilotes sans DNF
     df_clean = df[df["status"].str.contains("Finished|Lap|Lapped", regex=True, na=False)].copy()
@@ -48,19 +52,28 @@ def train_and_predict(df, target_year, target_round, gp_name):
     # apprentissage du modèle 2
     model_race = RandomForestRegressor(n_estimators=100, random_state=42)
     model_race.fit(X_race, y_race)
+    print("   -> Modèles entraînés.")
 
     # la simulation finale
     # NOUVEAUTÉ : on regarde d'abord si on a la liste EXACTE des participants dans les données
+    # AJOUT V1.2 : On récupère aussi la colonne 'grid' pour pouvoir l'utiliser
     official_entry_list = df[
         (df["year"] == target_year) & 
         (df["round"] == target_round)
     ].sort_values("grid")
 
     if not official_entry_list.empty:
-        # on prend exactement ceux qui étaient là
-        drivers_to_simulate = official_entry_list[["DriverName", "Team"]].drop_duplicates()
+        # on prend exactement ceux qui étaient là (avec leur grille si dispo)
+        # On vérifie si la colonne grid existe bien avant de la sélectionner
+        cols_to_keep = ["DriverName", "Team"]
+        if "grid" in official_entry_list.columns:
+            cols_to_keep.append("grid")
+            
+        drivers_to_simulate = official_entry_list[cols_to_keep].drop_duplicates()
+        print(f"   -> Liste officielle trouvée ({len(drivers_to_simulate)} pilotes).")
     else:
         # on récupère les pilotes de la saison actuelle (logique de repli)
+        print("   -> Course future (pas de data). Utilisation de la dernière grille connue.")
         df_current = df[df["year"] == target_year].sort_values("round", ascending=False)
         
         # sécurité début de saison
@@ -89,9 +102,17 @@ def train_and_predict(df, target_year, target_round, gp_name):
             # Etape 1 : on prédit la qualif
             pred_grid_raw = model_qualif.predict(X_pred_qualif)[0]
             
-            # Etape 2 : on utilise la qualif prédite pour prédire la course
+            # LOGIQUE V1.2 : Choix de la grille pour la course
+            # Par défaut, on prend la prédiction de l'IA
+            grid_input = pred_grid_raw
+            
+            # Si l'utilisateur veut la VRAIE grille et qu'on l'a dans les données
+            if use_real_grid and "grid" in row and not pd.isna(row["grid"]):
+                grid_input = row["grid"]
+
+            # Etape 2 : on utilise la grille choisie pour prédire la course
             X_pred_race = pd.DataFrame(
-                [[pred_grid_raw, t_id, d_id, target_year]],
+                [[grid_input, t_id, d_id, target_year]],
                 columns=["grid", "team_id", "driver_id", "year"]
             )
             pred_race_raw = model_race.predict(X_pred_race)[0]
@@ -100,7 +121,8 @@ def train_and_predict(df, target_year, target_round, gp_name):
                 "Pilote": driver,
                 "Ecurie": team,
                 "Qualif_Score": pred_grid_raw,
-                "Course_Score": pred_race_raw
+                "Course_Score": pred_race_raw,
+                "Grid_Used": grid_input # Pour info
             })
         except Exception:
             continue
