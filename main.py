@@ -1,5 +1,6 @@
 from src.data_manager import load_data, update_database, update_calendar, get_rounds_for_race
-from src.analysis import analyze_circuit_history
+from src.analysis import analyze_circuit_history, analyze_driver_form
+import time
 
 df = load_data()
 if df is not None:
@@ -10,3 +11,5 @@ if df is not None:
     if rounds_map:
         print(f"  -> Trouvé : {nom_officiel}")
         poids_qualif = analyze_circuit_history(df, rounds_map, nom_officiel, ANNEE_CIBLE)
+
+analyze_driver_form(df, 2025, 24)
