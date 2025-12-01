@@ -1,137 +1,89 @@
 import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import LabelEncoder
 from src.data_manager import load_data
-import time
+# on importe les fonctions de notre ml_model pour ne pas répéter le code
+from src.ml_model import encode_data, train_models, predict_race_outcome
 
 def run_simulation(season_to_simulate, use_real_grid=False):
-    # Affichage du mode choisi pour confirmation
-    mode_str = "VRAIE GRILLE (Analyse)" if use_real_grid else "GRILLE PRÉDITE (Full IA)"
-    print(f"\n🎬 --- DÉMARRAGE DE LA SIMULATION : SAISON {season_to_simulate} ---")
-    print(f"⚙️  Mode activé : {mode_str}")
+    mode = "VRAIE GRILLE" if use_real_grid else "GRILLE PRÉDITE"
+    print(f"\n--- SIMULATION SAISON {season_to_simulate} ({mode}) ---")
     
-    # 1. Chargement des données complètes
     df = load_data()
     if df is None: return
 
-    # On nettoie d'abord les données globales (pour l'encodage)
-    df_clean = df[df['status'].str.contains('Finished|Lap|Lapped', regex=True, na=False)].copy()
+    # encodage via la fonction partagée
+    df_clean, le_driver, le_team = encode_data(df)
 
-    # ENCODAGE GLOBAL
-    le_driver = LabelEncoder()
-    le_team = LabelEncoder()
+    races = df[df['year'] == season_to_simulate].sort_values('round')['round'].unique()
     
-    # Conversion en string pour sécurité
-    all_drivers = df['DriverName'].astype(str).unique()
-    all_teams = df['Team'].astype(str).unique()
-    
-    le_driver.fit(all_drivers)
-    le_team.fit(all_teams)
-    
-    # On applique l'encodage
-    df_clean['driver_id'] = le_driver.transform(df_clean['DriverName'].astype(str))
-    df_clean['team_id'] = le_team.transform(df_clean['Team'].astype(str))
+    # initialisation des stats
+    stats = {
+        'total': 0, 'exact_win': 0, 'mae': [], 
+        'top3': [], 'top5': [], 'top10': []
+    }
 
-    # 2. IDENTIFIER LES COURSES DE LA SAISON CIBLE
-    races_in_season = df[df['year'] == season_to_simulate].sort_values('round')['round'].unique()
-    
-    if len(races_in_season) == 0:
-        print(f"❌ Pas de données pour la saison {season_to_simulate}.")
-        return
-
-    score_card = [] # Pour stocker nos victoires/défaites
-
-    # 3. BOUCLE TEMPORELLE (Course par course)
-    for race_round in races_in_season:
-        print(f"\n🏁 Round {race_round} en cours de traitement...", end="") # petit end="" pour garder la ligne propre
+    for race_round in races:
+        print(f"\nRound {race_round}, vainqueur prédit : ", end="")
         
-        # --- A. ENTRAÎNEMENT (LE PASSÉ) ---
+        # entraînement
         mask_train = (df_clean['year'] < season_to_simulate) | \
                      ((df_clean['year'] == season_to_simulate) & (df_clean['round'] < race_round))
-        
         train_data = df_clean[mask_train]
         
-        if len(train_data) < 100:
-            print("   ⚠️ Pas assez de données historiques, on saute.")
+        if len(train_data) < 200: 
+            print(".", end="")
             continue
 
-        # Modèle QUALIF
-        # On définit explicitement les colonnes pour s'en souvenir après
-        cols_qualif = ['team_id', 'driver_id', 'year']
-        model_qualif = RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1)
-        model_qualif.fit(train_data[cols_qualif], train_data['grid'])
+        # appel fonction entraînement
+        models = train_models(train_data)
 
-        # Modèle COURSE
-        cols_race = ['grid', 'team_id', 'driver_id', 'year']
-        model_race = RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1)
-        model_race.fit(train_data[cols_race], train_data['position'])
+        # réalité
+        current_race = df_clean[(df_clean['year'] == season_to_simulate) & (df_clean['round'] == race_round)]
+        if current_race.empty: continue
 
-        # --- B. RÉALITÉ DU JOUR (LE PRÉSENT) ---
-        current_race_data = df_clean[
-            (df_clean['year'] == season_to_simulate) & 
-            (df_clean['round'] == race_round)
-        ].copy()
+        # appel fonction prédiction
+        results = predict_race_outcome(models, current_race, season_to_simulate, le_driver, le_team, use_real_grid)
         
-        if current_race_data.empty: continue
-
-        # On récupère le VRAI vainqueur pour vérifier après
-        vrai_vainqueur = current_race_data.sort_values('position').iloc[0]['DriverName']
-
-        # --- C. PRÉDICTION ---
-        predictions = []
-        for _, row in current_race_data.iterrows():
-            d_id = row['driver_id']
-            t_id = row['team_id']
-            
-            # --- CORRECTION ICI : On utilise des DataFrames ---
-            
-            # 1. On prédit la grille (même si on ne l'utilise pas, c'est bien de l'avoir)
-            X_q = pd.DataFrame([[t_id, d_id, season_to_simulate]], columns=cols_qualif)
-            pred_grid = model_qualif.predict(X_q)[0]
-            
-            # CHOIX STRATÉGIQUE : Quelle grille donner au modèle de course ?
-            if use_real_grid:
-                grid_input = row['grid'] # La vraie grille officielle
-            else:
-                grid_input = pred_grid   # La grille devinée par l'IA
-            
-            # 2. On prédit la course
-            X_r = pd.DataFrame([[grid_input, t_id, d_id, season_to_simulate]], columns=cols_race)
-            pred_pos = model_race.predict(X_r)[0]
-            
-            predictions.append({'Pilote': row['DriverName'], 'Score': pred_pos})
+        # analyse
+        results = results.merge(current_race[['DriverName', 'position']], left_on='Pilote', right_on='DriverName')
+        results = results.sort_values('Course_Score')
+        results['Pred_Pos'] = range(1, len(results) + 1)
         
-        # --- D. RÉSULTAT ---
-        results = pd.DataFrame(predictions).sort_values('Score')
-        winner_predicted = results.iloc[0]['Pilote']
+        # métriques
+        mae = abs(results['Pred_Pos'] - results['position']).mean()
+        stats['mae'].append(mae)
         
-        # Verdict
-        if winner_predicted == vrai_vainqueur:
-            print(f" -> ✅ BINGO ! ({vrai_vainqueur})")
-            score_card.append(1)
+        winner_pred = results.iloc[0]['Pilote']
+        winner_real = current_race.sort_values('position').iloc[0]['DriverName']
+        
+        if winner_pred == winner_real:
+            stats['exact_win'] += 1
+            print("✅", end="")
         else:
-            # Est-ce qu'il était au moins dans le Top 3 prédit ?
-            top3 = results.head(3)['Pilote'].values
-            if vrai_vainqueur in top3:
-                print(f" -> ⚠️ Presque (Top 3). IA: {winner_predicted} | Réel: {vrai_vainqueur}")
-            else:
-                print(f" -> ❌ Raté. IA: {winner_predicted} | Réel: {vrai_vainqueur}")
-            score_card.append(0)
+            print("❌", end="")
 
-    # 4. BILAN FINAL
-    if score_card:
-        accuracy = (sum(score_card) / len(score_card)) * 100
-        print(f"\n🏆 BILAN SAISON {season_to_simulate} ({mode_str})")
-        print(f"Courses prédites : {len(score_card)}")
-        print(f"Vainqueurs exacts : {sum(score_card)}")
-        print(f"PRÉCISION DU MODÈLE : {accuracy:.1f}%")
+        # précision stricte
+        def get_strict_acc(n):
+            top_ia = results.head(n)['Pilote'].tolist()
+            top_real = current_race.sort_values('position').head(n)['DriverName'].tolist()
+            matches = sum([1 for i in range(min(len(top_ia), len(top_real))) if top_ia[i] == top_real[i]])
+            return (matches / n) * 100
+
+        stats['top3'].append(get_strict_acc(3))
+        stats['top5'].append(get_strict_acc(5))
+        stats['top10'].append(get_strict_acc(10))
+        stats['total'] += 1
+
+    # bilan
+    if stats['total'] > 0:
+        nb = stats['total']
+        print(f"\n\n📊 BILAN {season_to_simulate}")
+        print(f"Vainqueur : {(stats['exact_win']/nb)*100:.1f}%")
+        print(f"Top 3 (Strict) : {sum(stats['top3'])/nb:.1f}%")
+        print(f"Top 5 (Strict) : {sum(stats['top5'])/nb:.1f}%")
+        print(f"Top 10 (Strict) : {sum(stats['top10'])/nb:.1f}%")
+        print(f"📉 Écart Moyen : {sum(stats['mae'])/nb:.2f} places") 
 
 if __name__ == "__main__":
-    annee = int(input("Quelle saison voulez-vous simuler ? "))
-    
-    # Nouvel input pour le mode de grille
-    choix_mode = input("Utiliser la VRAIE grille de départ pour la course ? (o/n) : ")
-    use_real = choix_mode.lower() == 'o'
-    
-    run_simulation(annee, use_real_grid=use_real)
+    annee = int(input("Saison : "))
+    choix = input("Vraie grille ? (o/n) : ")
+    run_simulation(annee, use_real_grid=(choix.lower() == 'o'))
