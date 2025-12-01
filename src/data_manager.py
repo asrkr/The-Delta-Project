@@ -48,9 +48,9 @@ def _fetch_race_result(url):
                 attempt += 1
         except Exception as e:
             print(f"Erreur technique : {e}")
-        # échec complet après les essais
-        print(f"Abandon définitif sur : {url}")
-        return None
+    # échec complet après les essais
+    print(f"Abandon définitif sur : {url}")
+    return None
 
 
 #  Partie 1 : télécharge les résultats, update le csv, et permet de filtrer les données qu'on veut par saison et course
@@ -133,7 +133,7 @@ def get_rounds_for_race(race_name_keyword):
     filtered = df[df["raceName"].str.contains(race_name_keyword, case=False, na=False)]
     if filtered.empty:
         print(f'Aucune course trouvée avec le nom "{race_name_keyword}".')
-        return {}
+        return {}, None
     # on créé le dictionnaire final (nom du GP + calendrier dans la saison)
     official_name = filtered.iloc[0]["raceName"]
     rounds_map = dict(zip(filtered["year"], filtered["round"]))
