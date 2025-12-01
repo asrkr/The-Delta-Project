@@ -106,7 +106,6 @@ The project follows an iterative approach. Current status:
 
   - [x] Robust and incremental scraping (2001-2025).
   - [x] Pipeline ML modulaire (Random Forest).
-  - [x] Gestion dynamique des participants et du Mercato.
   - [x] **V1.3:** Big Data History (from 2001) & Advanced Metrics.
   - [x] **V1.4:** Modular Architecture & Simulator Optimization.
 
