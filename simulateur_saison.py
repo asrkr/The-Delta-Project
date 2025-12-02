@@ -1,6 +1,5 @@
 import pandas as pd
 from src.data_manager import load_data
-# AJOUT : On importe add_dual_form ici
 from src.ml_model import encode_data, train_models, predict_race_outcome, add_dual_form, add_circuit_impact, add_driver_history
 
 def run_simulation(season_to_simulate, use_real_grid=False):
