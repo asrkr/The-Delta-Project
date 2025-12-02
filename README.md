@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.13.7-blue?style=flat&logo=python)
 ![Machine Learning](https://img.shields.io/badge/AI-RandomForest-green?style=flat&logo=scikit-learn)
-![Status](https://img.shields.io/badge/Status-V1.5_Stable-orange)
+![Status](https://img.shields.io/badge/Status-V1.5_Optimized-orange)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
 
@@ -26,12 +26,12 @@ The Greek initial for Delphi is **Delta** ($\Delta$). It fits perfectly as a dou
 * **"Dual Brain" Architecture:** Two distinct models working in a chain:
     1.  **Qualifying Model:** Predicts the starting grid based on driver, team, and year.
     2.  **Race Model:** Predicts the final result using the grid (real or simulated).
-* **Feature Engineering (V1.5):** Advanced logic to feed the AI with context:
+* **Advanced Feature Engineering (V1.5):** The AI analyzes deep context:
     * *Recent Form:* 3-race rolling average (Qualifying & Race pace).
     * *Circuit Impact:* Historical correlation of the track (Procession vs Overtaking friendly).
     * *Career Profile:* Intrinsic driver performance level at the time of the race.
-* **Advanced Backtesting:** Full season simulator with scenario comparison (Oracle vs Analyst modes) and strict accuracy metrics.
-* **Dynamic Management:** Automatic detection of participants and handling of future seasons via fallback logic.
+* **Backtesting Engine:** Full season simulator with scenario comparison (Oracle vs Analyst modes) and strict accuracy metrics.
+* **Dynamic Management:** Automatic detection of participants based on historical entry lists.
 
 ---
 
@@ -102,7 +102,7 @@ python simulateur_saison.py
 
 ## 🗺️ Roadmap
 
-The project follows an iterative approach. Current status: **V1.5 Stable**.
+The project follows an iterative approach. Current status: **V1.5 Optimized**.
 
 ### ✅ Phase 1: Foundations (V1.4)
 
@@ -113,9 +113,10 @@ The project follows an iterative approach. Current status: **V1.5 Stable**.
 
 ### ✅ Phase 2: Domain Intelligence (V1.5)
 
-  - [x] **Recent Form:** Implementation of rolling averages for Grid and Race positions.
+  - [x] **Feature Engineering:** Calculation of "Recent Form" (rolling average).
   - [x] **Circuit Analysis:** Calculation of track-specific grid impact (Correlation).
   - [x] **Full Career Analysis:** Integration of career stats and track-specific skills.
+  - [x] **Hyper-tuning:** Automated parameter optimization (Random Search).
 
 ### 🔮 Phase 3: Strategy & Environment (V2.0)
 
@@ -125,26 +126,25 @@ The project follows an iterative approach. Current status: **V1.5 Stable**.
 
 ### 🚀 Phase 4: Optimization (V3.0)
 
-  - [ ] **Model Swap:** Migration to **LightGBM Ranker**.
-  - [ ] **Hyper-tuning:** Automated parameter optimization.
+  - [ ] **Model Swap:** Migration to **LightGBM Ranker** (Learning to Rank).
 
 -----
 
 ## 📊 Current Performance (2025 Benchmark)
 
-This section details the model's accuracy on the full 2025 season (V1.5 Full Features), comparing the two core prediction modes.
+This section details the model's accuracy on the full 2025 season (V1.5 Optimized), comparing the two core prediction modes.
 
 | Metric | 🔮 Oracle Mode (Predicted Grid) | 🔬 Analyst Mode (Real Grid) |
 | :--- | :--- | :--- |
-| **Winner Accuracy (P1)** | **39.1%** | **56.5%** |
-| **Top 3 Accuracy (Strict Order)** | 27.5% | 39.1% |
-| **Top 5 Accuracy (Strict Order)** | 21.7% | 35.7% |
-| **Top 10 Accuracy (Strict Order)** | 15.7% | 27.0% |
-| **📉 Mean Absolute Error (MAE)** | 3.09 positions | **2.30 positions** |
+| **Winner Accuracy (P1)** | **43.5%** | **69.6%** |
+| **Top 3 Accuracy (Strict Order)** | 30.4% | 46.4% |
+| **Top 5 Accuracy (Strict Order)** | 25.2% | 38.3% |
+| **Top 10 Accuracy (Strict Order)** | 18.3% | 26.5% |
+| **📉 Mean Absolute Error (MAE)** | **2.93 positions** | **2.47 positions** |
 
 ### Interpretation
 
-The **V1.5** update successfully improved the "Oracle" capabilities, reaching nearly **40% winner accuracy** without knowing the grid. The Drop in Analyst Mode metrics compared to V1.4 suggests the model is becoming more complex and nuanced, relying less on raw grid position and more on driver/car dynamics.
+The **V1.5 Optimized** update successfully broke the 40% winner accuracy barrier in Oracle Mode. The sub-3.0 MAE indicates that the model has gained significant stability and "racing IQ" thanks to the new feature set and hyperparameter tuning.
 
 -----
 
