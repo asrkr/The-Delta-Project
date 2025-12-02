@@ -26,5 +26,5 @@ if df is not None:
         else:
             print(f"Course non trouvée dans le calendrier {ANNEE_CIBLE}")
 
-    except ValueError:
-        print("Erreur : l'année doit être un nombre.")
+    except Exception as e:
+        print(f"Erreur : {e}")
