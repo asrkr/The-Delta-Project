@@ -1,7 +1,7 @@
 import pandas as pd
 from src.data_manager import load_data
 # AJOUT : On importe add_dual_form ici
-from src.ml_model import encode_data, train_models, predict_race_outcome, add_dual_form
+from src.ml_model import encode_data, train_models, predict_race_outcome, add_dual_form, add_circuit_impact, add_driver_history
 
 def run_simulation(season_to_simulate, use_real_grid=False):
     mode = "VRAIE GRILLE" if use_real_grid else "GRILLE PRÉDITE"
@@ -14,9 +14,11 @@ def run_simulation(season_to_simulate, use_real_grid=False):
     # On doit d'abord calculer les formes (points/positions récentes)
     # avant de nettoyer les données, sinon l'IA ne trouve pas ses colonnes !
     df = add_dual_form(df)
+    df = add_circuit_impact(df)
+    df = add_driver_history(df)
 
     # Ensuite on encode
-    df_clean, le_driver, le_team = encode_data(df)
+    df_clean, le_driver, le_team, le_circuit = encode_data(df)
 
     races = df[df['year'] == season_to_simulate].sort_values('round')['round'].unique()
     
@@ -47,7 +49,7 @@ def run_simulation(season_to_simulate, use_real_grid=False):
 
         # prédiction via la fonction partagée
         # ATTENTION : On passe 'df' (le complet avec historique) pour récupérer les formes
-        results = predict_race_outcome(models, current_race, season_to_simulate, race_round, le_driver, le_team, df, use_real_grid)
+        results = predict_race_outcome(models, current_race, season_to_simulate, race_round, le_driver, le_team, le_circuit, df, use_real_grid)
         
         # analyse des résultats
         results = results.merge(current_race[['DriverName', 'position']], left_on='Pilote', right_on='DriverName')
