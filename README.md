@@ -55,11 +55,9 @@ The-Delta-Project/
 │
 ├── src/                       # Source Code
 │   ├── data_manager.py        # ETL Pipeline (Extract, Transform, Load)
-│   ├── ml_model.py            # AI Brain (Feature Engineering & Prediction)
-│   └── analysis.py            # Exploratory Data Analysis (Data Viz)
+│   └── ml_model.py            # AI Brain (Feature Engineering & Prediction)
 │
 ├── main.py                    # Main Script (Single Race Prediction)
-├── simulateur_saison.py       # Backtesting Script (Full Season Simulation)
 └── README.md                  # Documentation
 ````
 
