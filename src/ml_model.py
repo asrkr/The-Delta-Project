@@ -130,22 +130,22 @@ def encode_data(df):
 def train_models(df_train):
     # Paramètres de RandomForestRegressor (testés et optimisés)
     params_qualif = {
-        "n_estimators": 1200,
-        "min_samples_split": 6,
+        "n_estimators": 400,
+        "min_samples_split": 4,
         "min_samples_leaf": 4,
-        "max_features": "log2",
-        "max_depth": 6,
-        "bootstrap": True,
+        "max_features": "sqrt",
+        "max_depth": 14,
+        "bootstrap": False,
         "n_jobs": -1,
         "random_state": 42
     }
     params_race = {
-        "n_estimators": 200,
-        "min_samples_split": 6,
-        "min_samples_leaf": 3,
+        "n_estimators": 800,
+        "min_samples_split": 2,
+        "min_samples_leaf": 1,
         "max_features": None,
-        "max_depth": 10,
-        "bootstrap": True,
+        "max_depth": 8,
+        "bootstrap": False,
         "n_jobs": -1,
         "random_state": 42
     }
@@ -316,7 +316,7 @@ def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=Fals
     df = add_driver_history(df)
 
     # encodage global
-    df_clean, le_driver, le_team = encode_data(df)
+    df_clean, le_driver, le_team, le_circuit = encode_data(df)
 
     # séparation temporelle (on apprend sur le passé)
     mask_train = (df_clean["year"] < target_year) | ((df_clean["year"] == target_year) & (df_clean["round"] < target_round))
