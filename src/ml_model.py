@@ -129,12 +129,22 @@ def encode_data(df):
 # fonction pour entraîner les modèles
 def train_models(df_train):
     # Paramètres de RandomForestRegressor (testés et optimisés)
-    params = {
-        "n_estimators": 600,
-        "max_depth": 14,
-        "min_samples_split": 4,
-        "min_samples_leaf": 2,
-        "max_features": "sqrt",
+    params_qualif = {
+        "n_estimators": 1200,
+        "min_samples_split": 6,
+        "min_samples_leaf": 4,
+        "max_features": "log2",
+        "max_depth": 6,
+        "bootstrap": True,
+        "n_jobs": -1,
+        "random_state": 42
+    }
+    params_race = {
+        "n_estimators": 200,
+        "min_samples_split": 6,
+        "min_samples_leaf": 3,
+        "max_features": None,
+        "max_depth": 10,
         "bootstrap": True,
         "n_jobs": -1,
         "random_state": 42
@@ -151,7 +161,7 @@ def train_models(df_train):
         "career_grid_avg",
         "circuit_grid_skill"
         ]
-    model_qualif = RandomForestRegressor(**params)
+    model_qualif = RandomForestRegressor(**params_qualif)
     model_qualif.fit(df_train[features_qualif], df_train["grid"])
     # MODELE 2 v1.5 : prédiction de la course (avec maintenant la forme récente de course + l'historique)
     features_race = [
@@ -165,7 +175,7 @@ def train_models(df_train):
         "career_race_avg",
         "circuit_race_skill"
         ]
-    model_race = RandomForestRegressor(**params)
+    model_race = RandomForestRegressor(**params_race)
     model_race.fit(df_train[features_race], df_train["position"])
 
     return model_qualif, model_race
