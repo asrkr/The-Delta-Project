@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.13.7-blue?style=flat&logo=python)
 ![Machine Learning](https://img.shields.io/badge/AI-RandomForest-green?style=flat&logo=scikit-learn)
-![Status](https://img.shields.io/badge/Status-V1.5_Beta-orange)
+![Status](https://img.shields.io/badge/Status-V1.5_Stable-orange)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
 
@@ -26,10 +26,12 @@ The Greek initial for Delphi is **Delta** ($\Delta$). It fits perfectly as a dou
 * **"Dual Brain" Architecture:** Two distinct models working in a chain:
     1.  **Qualifying Model:** Predicts the starting grid based on driver, team, and year.
     2.  **Race Model:** Predicts the final result using the grid (real or simulated).
-* **Advanced Backtesting:** Full season simulator with scenario comparison:
-    * *Oracle Mode:* The AI guesses everything (Qualif + Race).
-    * *Analyst Mode:* The AI uses the real starting grid (isolates race performance).
-* **Dynamic Management:** Automatic detection of participants (historical Entry List) and handling of transfers/rookies for future seasons (2025).
+* **Feature Engineering (V1.5):** Advanced logic to feed the AI with context:
+    * *Recent Form:* 3-race rolling average (Qualifying & Race pace).
+    * *Circuit Impact:* Historical correlation of the track (Procession vs Overtaking friendly).
+    * *Career Profile:* Intrinsic driver performance level at the time of the race.
+* **Advanced Backtesting:** Full season simulator with scenario comparison (Oracle vs Analyst modes) and strict accuracy metrics.
+* **Dynamic Management:** Automatic detection of participants and handling of future seasons via fallback logic.
 
 ---
 
@@ -53,10 +55,10 @@ The-Delta-Project/
 │
 ├── src/                       # Source Code
 │   ├── data_manager.py        # ETL Pipeline (Extract, Transform, Load)
-│   ├── ml_model.py            # AI Brain (Training & Prediction Engine)
+│   ├── ml_model.py            # AI Brain (Feature Engineering & Prediction)
 │   └── analysis.py            # Exploratory Data Analysis (Data Viz)
 │
-├── main.py                    # Script principal (Single Race Prediction)
+├── main.py                    # Main Script (Single Race Prediction)
 ├── simulateur_saison.py       # Backtesting Script (Full Season Simulation)
 └── README.md                  # Documentation
 ````
@@ -100,20 +102,20 @@ python simulateur_saison.py
 
 ## 🗺️ Roadmap
 
-The project follows an iterative approach. Current status:
+The project follows an iterative approach. Current status: **V1.5 Stable**.
 
 ### ✅ Phase 1: Foundations (V1.4)
 
   - [x] Robust and incremental scraping (2001-2025).
-  - [x] Pipeline ML modulaire (Random Forest).
-  - [x] **V1.3:** Big Data History (from 2001) & Advanced Metrics.
-  - [x] **V1.4:** Modular Architecture & Simulator Optimization.
+  - [x] Functional ML Pipeline (Random Forest).
+  - [x] Dynamic Participant Retrieval.
+  - [x] Precision Metrics (MAE, Top 3, Top 10).
 
-### 🚧 Phase 2: Domain Intelligence (V1.5 - In Progress)
+### ✅ Phase 2: Domain Intelligence (V1.5)
 
-  - [ ] **Feature Engineering:** Calculation of "Recent Form" (rolling average).
-  - [ ] **Circuit Analysis:** Track-specific qualifying impact.
-  - [ ] **Dynamic Career:** Assessment of intrinsic driver level at time T.
+  - [x] **Recent Form:** Implementation of rolling averages for Grid and Race positions.
+  - [x] **Circuit Analysis:** Calculation of track-specific grid impact (Correlation).
+  - [x] **Full Career Analysis:** Integration of career stats and track-specific skills.
 
 ### 🔮 Phase 3: Strategy & Environment (V2.0)
 
@@ -121,29 +123,31 @@ The project follows an iterative approach. Current status:
   - [ ] **Pitstops** consideration (average time loss per track).
   - [ ] **Sprint** format handling.
 
-### 🚀 Phase 4: Optimisation (V3.0)
+### 🚀 Phase 4: Optimization (V3.0)
 
-  - [ ] **Model Swap:** Migration to **LightGBM Ranker** (Learning to Rank).
+  - [ ] **Model Swap:** Migration to **LightGBM Ranker**.
   - [ ] **Hyper-tuning:** Automated parameter optimization.
 
 -----
 
 ## 📊 Current Performance (2025 Benchmark)
 
-This section details the model's accuracy on the full 2025 season, comparing the two core prediction modes.
+This section details the model's accuracy on the full 2025 season (V1.5 Full Features), comparing the two core prediction modes.
 
 | Metric | 🔮 Oracle Mode (Predicted Grid) | 🔬 Analyst Mode (Real Grid) |
 | :--- | :--- | :--- |
-| **Winner Accuracy (P1)** | 34.8% | **69.6%** |
-| **Top 3 Accuracy (Strict Order)** | 31.9% | 40.6% |
-| **Top 5 Accuracy (Strict Order)** | 20.9% | 33.9% |
-| **Top 10 Accuracy (Strict Order)** | 14.8% | 24.8% |
-| **📉 Mean Absolute Error (MAE)** | 3.08 positions | **2.31 positions** |
+| **Winner Accuracy (P1)** | **39.1%** | **56.5%** |
+| **Top 3 Accuracy (Strict Order)** | 27.5% | 39.1% |
+| **Top 5 Accuracy (Strict Order)** | 21.7% | 35.7% |
+| **Top 10 Accuracy (Strict Order)** | 15.7% | 27.0% |
+| **📉 Mean Absolute Error (MAE)** | 3.09 positions | **2.30 positions** |
+
+### Interpretation
+
+The **V1.5** update successfully improved the "Oracle" capabilities, reaching nearly **40% winner accuracy** without knowing the grid. The Drop in Analyst Mode metrics compared to V1.4 suggests the model is becoming more complex and nuanced, relying less on raw grid position and more on driver/car dynamics.
 
 -----
 
 ### Author
 
 Project developed by an engineering student passionate about F1 and Computer Science.
-
------
