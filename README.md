@@ -74,7 +74,7 @@ pip install pandas numpy scikit-learn requests seaborn matplotlib fastf1
 Before first use, build the database using the update manager:
 
 ```bash
-python update_data.py
+python update_manager.py
 # Select Option 7 (Update ALL) for a fresh start
 ```
 
