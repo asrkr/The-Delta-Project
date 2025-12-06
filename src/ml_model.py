@@ -394,10 +394,6 @@ def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=Fals
 
     # 4) Grille
     target_list = get_race_participants(df, target_year, target_round)
-    
-    if target_list.empty:
-        print("❌ Erreur : Liste des participants vide.")
-        return
 
     # Gestion grille réelle
     has_grid_in_main = "grid" in target_list.columns and target_list["grid"].notna().any()
@@ -411,6 +407,10 @@ def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=Fals
         else:
             print("❗Grille réelle indisponible. Passage en mode Grille IA.")
             use_real_grid = False
+    
+    if target_list.empty:
+        print("❌ Erreur : Liste des participants vide.")
+        return
 
     # 5) Prédiction
     results = predict_race_outcome(
