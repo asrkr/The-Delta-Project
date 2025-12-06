@@ -1,124 +1,186 @@
 import pandas as pd
 import numpy as np
 import os
+import warnings
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
-from src.data_manager import get_race_participants
+from src.data_manager import get_race_participants, has_real_qualifying, load_real_qualifying, load_extra_features
 
 
-# V1.5-beta : fonction pour calculer la forme récente des pilotes (qualif ET course) sur les 3 derniers rounds
+warnings.filterwarnings("ignore", message="Mean of empty slice")
+
+
+# ---------------------------------------------------------
+# 1) Forme récente pilote (3 derniers GP)
+# ---------------------------------------------------------
 def add_dual_form(df):
-    # on trie  par ordre chronologique (histoire de récupérer les "3 derniers")
     df = df.sort_values(by=["year", "round"])
-    # on s'assure qu'on a bien des chiffres
     df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
     df["position"] = pd.to_numeric(df["position"], errors="coerce")
-    # on calcule la forme récente en qualifications : shift(1) => on décale d'une ligne vers le bas pour avoir la course du passé
-    # window=3 => on prend une fenêtre de 3 courses
+
     df["form_grid"] = df.groupby("DriverName")["grid"].transform(
         lambda x: x.shift(1).rolling(window=3, min_periods=1).mean()
     )
-    # On calcule la forme récente en course
     df["form_race"] = df.groupby("DriverName")["position"].transform(
         lambda x: x.shift(1).rolling(window=3, min_periods=1).mean()
     )
-    # on remplit les trous (débuts de carrière) par 13.0 (milieu de peloton)
+
     df["form_grid"] = df["form_grid"].fillna(13.0)
     df["form_race"] = df["form_race"].fillna(13.0)
-
     return df
 
 
-# V1.5 : fonction pour ajouter l'impact du circuit (via races_calendar.csv)
+# ---------------------------------------------------------
+# 2) Importance du circuit
+# ---------------------------------------------------------
 def add_circuit_impact(df):
-    # on va utiliser l'importance historique de la qualif pour chaque circuit
-    # en utilisant notre race_calendar.csv pour identifier chaque circuit
-    # on charge le calendrier :
     current_dir = os.path.dirname(os.path.abspath(__file__))
     calendar_path = os.path.join(os.path.dirname(current_dir), "data", "races_calendar.csv")
+
     if not os.path.exists(calendar_path):
-        print("Calendrier introuvable.")
-        df["circuit_importance"] = 0.6
+        df["circuit_importance"] = 0.5
         return df
+
     calendar = pd.read_csv(calendar_path)
-    # On fusionne le tout pour ajouter circuitId aux données de course
-    df_merged = df.merge(calendar[["year", "round", "circuitId"]], on=["year", "round"], how="left")
-    # on ne prend que les pilotes qui ont fini une course
-    df_finishers = df_merged[df_merged["status"].str.contains("Finished|Lap|Lapped", regex=True, na=False)]
-    # on calcule la corrélation grille/position pour chaque circuitId
-    circuit_stats = df_finishers.groupby("circuitId")[["grid", "position"]].corr().iloc[0::2, -1]
-    # on nettoie les résultats, en les transformant en dictionnaire simple
-    circuit_impact_map = {}
-    for idx, val in circuit_stats.items():
-        # idx est un tuple (circuitId, "grid")
-        circuit_id = idx[0]
-        if not pd.isna(val):
-            circuit_impact_map[circuit_id] = val
+
+    if "circuitId" not in df.columns:
+        df = df.merge(calendar[["year", "round", "circuitId"]], on=["year", "round"], how="left")
+    else:
+        # Nettoyage doublons si merge précédent
+        if "circuitId_x" in df.columns:
+            df["circuitId"] = df["circuitId_x"].fillna(df["circuitId_y"])
+            df = df.drop(columns=["circuitId_x", "circuitId_y"])
+
+    df["circuitId"] = df["circuitId"].fillna("unknown")
+
+    finishers = df[df["status"].str.contains("Finished|Lap|Lapped", regex=True, na=False)]
+    
+    if finishers.empty:
+        df["circuit_importance"] = 0.5
+        return df
+
+    try:
+        corr = finishers.groupby("circuitId")[["grid", "position"]].corr().iloc[0::2, -1]
+        # Reconstruction propre du dictionnaire
+        impact_map = {}
+        for idx, val in corr.items():
+            circuit_id = idx[0] # idx est un tuple (circuitId, 'grid')
+            impact_map[circuit_id] = val if not pd.isna(val) else 0.5
+            
+        df["circuit_importance"] = df["circuitId"].map(impact_map).fillna(0.5)
+    except:
+        df["circuit_importance"] = 0.5
+
+    return df
+
+
+# ---------------------------------------------------------
+# 3) Features FastF1 (Gestion Robustesse)
+# ---------------------------------------------------------
+def add_fastf1_features(df):
+    extra = load_extra_features()
+    fastf1_cols = ["avg_race_pace", "best_lap", "pitstops_count", "mean_pit_loss"]
+
+    # Si pas de fichier extra, on crée les colonnes vides (0.0)
+    if extra is None or extra.empty:
+        for c in fastf1_cols: df[c] = 0.0
+        return df
+
+    # Nettoyage mean_pit_loss si nécessaire
+    if "pit_losses" in extra.columns and "mean_pit_loss" not in extra.columns:
+        def clean_pit(val):
+            try:
+                if isinstance(val, str):
+                    v = val.replace("[","").replace("]","").split(",")
+                    nums = [float(x) for x in v if x.strip()]
+                    return np.mean(nums) if nums else np.nan
+                return float(val)
+            except: return np.nan
+        extra["mean_pit_loss"] = extra["pit_losses"].apply(clean_pit)
+
+    # Merge
+    # On ne garde que les colonnes qui existent vraiment dans extra
+    cols_to_merge = ["year", "round", "DriverName"] + [c for c in fastf1_cols if c in extra.columns]
+    
+    df = df.merge(extra[cols_to_merge], on=["year","round","DriverName"], how="left", suffixes=("", "_extra"))
+
+    # Remplissage des NaN (Médiane ou 0)
+    for c in fastf1_cols:
+        if c in df.columns:
+            med = df[c].median()
+            val = 0.0 if pd.isna(med) else med
+            df[c] = df[c].fillna(val)
         else:
-            circuit_impact_map[circuit_id] = 0.5   # valeur par défaut si pas de données
-    # on rempace df par la version fusionnée
-    df = df_merged
-    # on map la valeur
-    df["circuit_importance"] = df["circuitId"].map(circuit_impact_map)
-    # si on a pas de valeur, alors valeur par défaut
-    df["circuit_importance"] = df["circuit_importance"].fillna(0.5)
-
+            df[c] = 0.0
+            
     return df
 
 
-# V1.5 : fonction pour ajouter la prise en compte des résultats de la carrière d'un pilote
+# ---------------------------------------------------------
+# 4) Historique Carrière (Stats Avancées)
+# ---------------------------------------------------------
 def add_driver_history(df):
-    """
-    On calcule 4 indicateurs historiques :
-    - career_grid_avg : Moyenne Qualif en carrière
-    - career_race_avg : Moyenne Course en carrière
-    - circuit_grid_skill : Moyenne Qualif sur CE circuit
-    - circuit_race_skill : Moyenne Course sur CE circuit
-    """
-    df = df.sort_values(by=["year", "round"])
-    # Carrière globale (qualif et course)
-    grouped_driver = df.groupby("DriverName")
-    df["career_grid_avg"] = grouped_driver["grid"].transform(
-        lambda x: x.shift(1).expanding().mean()
-    )
-    df["career_race_avg"] = grouped_driver["position"].transform(
-        lambda x: x.shift(1).expanding().mean()
-    )
-    # force sur le circuit
-    grouped_circuit = df.groupby(["DriverName", "circuitId"])
-    df["circuit_grid_skill"] = grouped_circuit["grid"].transform(
-        lambda x: x.shift(1).expanding().mean()
-    )
-    df["circuit_race_skill"] = grouped_circuit["position"].transform(
-        lambda x: x.shift(1).expanding().mean()
-    )
-    # remplissage par défaut, (14.0 => milieu/bas de grille)
-    cols_to_fill = ["career_grid_avg", "career_race_avg", "circuit_grid_skill", "circuit_race_skill"]
-    df[cols_to_fill] = df[cols_to_fill].fillna(14.0)
+    df = df.sort_values(["year", "round"])
+    
+    # Sécurité : on s'assure que les colonnes FastF1 existent avant de faire le transform
+    for c in ["avg_race_pace", "best_lap", "mean_pit_loss"]:
+        if c not in df.columns: df[c] = 0.0
+
+    grp = df.groupby("DriverName")
+    
+    # Stats classiques
+    df["career_grid_avg"] = grp["grid"].transform(lambda x: x.shift(1).expanding().mean())
+    df["career_race_avg"] = grp["position"].transform(lambda x: x.shift(1).expanding().mean())
+    
+    # Stats FastF1
+    df["career_race_pace"] = grp["avg_race_pace"].transform(lambda x: x.shift(1).expanding().mean())
+    df["career_best_lap"] = grp["best_lap"].transform(lambda x: x.shift(1).expanding().mean())
+    df["career_pit_loss"] = grp["mean_pit_loss"].transform(lambda x: x.shift(1).expanding().mean())
+
+    # Stats Circuit
+    if "circuitId" in df.columns:
+        grpc = df.groupby(["DriverName", "circuitId"])
+        df["circuit_grid_skill"] = grpc["grid"].transform(lambda x: x.shift(1).expanding().mean())
+        df["circuit_race_skill"] = grpc["position"].transform(lambda x: x.shift(1).expanding().mean())
+    else:
+        df["circuit_grid_skill"] = np.nan
+        df["circuit_race_skill"] = np.nan
+
+    # Remplissage
+    cols_fill = ["career_grid_avg", "career_race_avg", "circuit_grid_skill", "circuit_race_skill"]
+    df[cols_fill] = df[cols_fill].fillna(14.0)
+    
+    cols_fill_f1 = ["career_race_pace", "career_best_lap", "career_pit_loss"]
+    for c in cols_fill_f1:
+        med = df[c].median()
+        val = 0.0 if pd.isna(med) else med
+        df[c] = df[c].fillna(val)
 
     return df
 
 
-# fonction pour préparer les données et les encodeurs
+# ---------------------------------------------------------
+# 5) Encodage
+# ---------------------------------------------------------
 def encode_data(df):
-    # on prend les données des pilotes sans les DNF
     df_clean = df[df["status"].str.contains("Finished|Lap|Lapped", regex=True, na=False)].copy()
 
-    # on prépare l'encodage de tous les pilotes, des écuries et des circuits
     le_driver = LabelEncoder()
     le_team = LabelEncoder()
     le_circuit = LabelEncoder()
 
-    # on combine tous les pilotes, écuries et circuits connus pour l'encodage
     all_drivers = df["DriverName"].astype(str).unique()
     all_teams = df["Team"].astype(str).unique()
-    all_circuits = df["circuitId"].astype(str).unique()
+    if "circuitId" in df.columns:
+        all_circuits = df["circuitId"].astype(str).unique()
+    else:
+        all_circuits = ["unknown"]
+        df_clean["circuitId"] = "unknown"
 
     le_driver.fit(all_drivers)
     le_team.fit(all_teams)
     le_circuit.fit(all_circuits)
 
-    # on applique l'encodage
     df_clean["driver_id"] = le_driver.transform(df_clean["DriverName"].astype(str))
     df_clean["team_id"] = le_team.transform(df_clean["Team"].astype(str))
     df_clean["circuit_id"] = le_circuit.transform(df_clean["circuitId"].astype(str))
@@ -126,173 +188,173 @@ def encode_data(df):
     return df_clean, le_driver, le_team, le_circuit
 
 
-# fonction pour entraîner les modèles
+# ---------------------------------------------------------
+# 6) Entraînement
+# ---------------------------------------------------------
 def train_models(df_train):
-    # Paramètres de RandomForestRegressor (testés et optimisés)
+    # Paramètres (Tu peux remettre les tiens ici)
     params_qualif = {
-        "n_estimators": 400,
-        "min_samples_split": 4,
-        "min_samples_leaf": 4,
+        "n_estimators": 200,
+        "max_depth": 10,
+        "min_samples_split": 6,
+        "min_samples_leaf": 3,
         "max_features": "sqrt",
-        "max_depth": 14,
         "bootstrap": False,
-        "n_jobs": -1,
-        "random_state": 42
+        "random_state": 42,
+        "n_jobs": -1
     }
     params_race = {
-        "n_estimators": 800,
-        "min_samples_split": 2,
+        "n_estimators": 1200,
+        "max_depth": 6,
+        "min_samples_split": 8,
         "min_samples_leaf": 1,
         "max_features": None,
-        "max_depth": 8,
         "bootstrap": False,
-        "n_jobs": -1,
-        "random_state": 42
+        "random_state": 42,
+        "n_jobs": -1
     }
 
-    # MODELE 1 v1.5 : prédiction de la qualif (avec maintenant la forme récente de qualif + l'historique)
+    # Liste Qualif
     features_qualif = [
-        "team_id",
-        "driver_id",
-        "year",
-        "form_grid",
-        "circuit_importance",
-        "circuit_id",
-        "career_grid_avg",
-        "circuit_grid_skill"
-        ]
+        "team_id", "driver_id", "year", 
+        "form_grid", "circuit_importance", "circuit_id", 
+        "career_grid_avg", "circuit_grid_skill"
+    ]
+    # Filtre pour ne garder que ce qui existe
+    features_qualif = [f for f in features_qualif if f in df_train.columns]
+    
     model_qualif = RandomForestRegressor(**params_qualif)
     model_qualif.fit(df_train[features_qualif], df_train["grid"])
-    # MODELE 2 v1.5 : prédiction de la course (avec maintenant la forme récente de course + l'historique)
+
+    # Liste Course (AVEC LES FEATURES FASTF1)
     features_race = [
-        "grid",
-        "team_id",
-        "driver_id",
-        "year",
-        "form_race",
-        "circuit_importance",
-        "circuit_id",
-        "career_race_avg",
-        "circuit_race_skill"
-        ]
+        "grid", "team_id", "driver_id", "year", 
+        "form_race", "circuit_importance", "circuit_id", 
+        "career_race_avg", "circuit_race_skill",
+        "career_race_pace", "career_best_lap", "career_pit_loss" # <-- Ici
+    ]
+    features_race = [f for f in features_race if f in df_train.columns]
+
     model_race = RandomForestRegressor(**params_race)
     model_race.fit(df_train[features_race], df_train["position"])
 
     return model_qualif, model_race
 
 
-# fonction pour prédire une liste de pilotes avec leur historique de forme
+# ---------------------------------------------------------
+# 7) Prédiction (TA VERSION CORRIGÉE)
+# ---------------------------------------------------------
 def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_team, le_circuit, full_df, use_real_grid=False):
     model_qualif, model_race = models
     simulation_results = []
-    last_stats_map = {}
-    # on prépare un dico des formes actuelles de chaque pilote de la grille
-    last_forms = {}
-    for driver in drivers_df["DriverName"].unique():
-        # on récupère l'historique complet du pilote
-        driver_history = full_df[
-            (full_df["DriverName"] == driver) &
-            ((full_df["year"] < year) | ((full_df["year"] == year) & (full_df["round"] < target_round)))
-        ]
-        if not driver_history.empty:
-            # on prend la ligne la plus récente (la dernière)
-            last_stats = driver_history.iloc[-1]
-            last_forms[driver] = {
-                "form_grid": last_stats["form_grid"],
-                "form_race": last_stats["form_race"]
-            }
-        else:
-            # si c'est un nouveau pilote, moyenne par défaut
-            last_forms[driver] = {"form_grid": 13.0, "form_race": 15.0}
-    
-    # On récupère l'impact circuit (trouver le circuitId de la course qu'on veut)
+
+    # Valeurs par défaut
+    default_race_pace = full_df["career_race_pace"].median() if "career_race_pace" in full_df else 95.0
+    default_best_lap = full_df["career_best_lap"].median() if "career_best_lap" in full_df else 95.0
+    default_pit_loss = full_df["career_pit_loss"].median() if "career_pit_loss" in full_df else 25.0
+
+    # 1. Circuit ID & Impact
     target_race_info = full_df[(full_df["year"] == year) & (full_df["round"] == target_round)]
-    impact_val = 0.5   # par défaut
+    impact_val = 0.5
     circuit_name_str = "unknown"
+    
     if not target_race_info.empty:
         impact_val = target_race_info.iloc[0]["circuit_importance"]
         circuit_name_str = target_race_info.iloc[0]["circuitId"]
     else:
-        # si c'est une course future, on cherche dans le calendrier (donc on l'ouvre encore)
+        # Fallback Calendrier
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        calendar_path = os.path.join(os.path.dirname(current_dir), "data", "races_calendar.csv")
-        if os.path.exists(calendar_path):
-            cal = pd.read_csv(calendar_path)
-            # on cherche le circuit de cette année/round
-            race_cal = cal[(cal["year"] == year) & (cal["round"] == target_round)]
-            if not race_cal.empty:
-                cid = race_cal.iloc[0]["circuitId"]
-                # maintenant on cherche la donnée historique de ce circuit dans full_df
+        cal_path = os.path.join(os.path.dirname(current_dir), "data", "races_calendar.csv")
+        if os.path.exists(cal_path):
+            cal = pd.read_csv(cal_path)
+            row = cal[(cal["year"] == year) & (cal["round"] == target_round)]
+            if not row.empty:
+                circuit_name_str = row.iloc[0]["circuitId"]
                 if "circuitId" in full_df.columns:
-                    hist_circuit = full_df[full_df["circuitId"] == cid]
-                    if not hist_circuit.empty:
-                        impact_val = hist_circuit["circuit_importance"].mean()
-    
-    # encodage du circuit cible
-    try:
-        c_id = le_circuit.transform([str(circuit_name_str)])[0]
-    except:
-        c_id = 0
-    
-    # on récupère les stats pilote
+                    hist = full_df[full_df["circuitId"] == circuit_name_str]
+                    if not hist.empty:
+                        impact_val = hist["circuit_importance"].mean()
+
+    try: c_id = le_circuit.transform([str(circuit_name_str)])[0]
+    except: c_id = 0
+
+    # 2. Stats Pilotes
+    last_stats_map = {}
     for driver in drivers_df["DriverName"].unique():
-        # historique global du pilote avant la course
+        # Historique AVANT la course cible
         driver_history = full_df[
             (full_df["DriverName"] == driver) &
             ((full_df["year"] < year) | ((full_df["year"] == year) & (full_df["round"] < target_round)))
         ]
-        # historique sur CE circuit
-        driver_circuit_history = driver_history[driver_history["circuitId"] == circuit_name_str]
-        # valeurs par défaut (rookies)
+        
+        driver_circuit_history = pd.DataFrame()
+        if "circuitId" in driver_history.columns:
+            driver_circuit_history = driver_history[driver_history["circuitId"] == circuit_name_str]
+
         stats = {
             "form_grid": 13.0, "form_race": 15.0,
             "career_grid_avg": 14.0, "career_race_avg": 14.0,
-            "circuit_grid_skill": 14.0, "circuit_race_skill": 14.0
+            "circuit_grid_skill": 14.0, "circuit_race_skill": 14.0,
+            "career_race_pace": default_race_pace,
+            "career_best_lap": default_best_lap,
+            "career_pit_loss": default_pit_loss
         }
+
         if not driver_history.empty:
             last = driver_history.iloc[-1]
-            stats.update({
-                "form_grid": last["form_grid"],
-                "form_race": last["form_race"],
-                "career_grid_avg": last["career_grid_avg"],
-                "career_race_avg": last["career_race_avg"]
-            })
+            # Update intelligent
+            for k in stats.keys():
+                if k in last and not pd.isna(last[k]):
+                    stats[k] = last[k]
+
         if not driver_circuit_history.empty:
             last_c = driver_circuit_history.iloc[-1]
-            stats.update({
-                "circuit_grid_skill": last_c["circuit_grid_skill"],
-                "circuit_race_skill": last_c["circuit_race_skill"]
-            })
+            for k in ["circuit_grid_skill", "circuit_race_skill"]:
+                if k in last_c and not pd.isna(last_c[k]):
+                    stats[k] = last_c[k]
+
         last_stats_map[driver] = stats
 
-    # on lance la simulation pilote par pilote
+    # 3. Boucle Prédiction
     for _, row in drivers_df.iterrows():
         driver = row["DriverName"]
         team = row["Team"]
-        # on récupère les formes
         stats = last_stats_map.get(driver)
 
         try:
             d_id = le_driver.transform([str(driver)])[0]
             t_id = le_team.transform([str(team)])[0]
 
-            # Etape 1 on prédit la qualif
-            X_q = pd.DataFrame(
-                [[t_id, d_id, year, stats["form_grid"], impact_val, c_id, stats["career_grid_avg"], stats["circuit_grid_skill"]]],
-                columns=["team_id", "driver_id", "year", "form_grid", "circuit_importance", "circuit_id", "career_grid_avg", "circuit_grid_skill"]
-            )
+            # Qualif
+            input_q = [
+                t_id, d_id, year,
+                stats["form_grid"], impact_val, c_id,
+                stats["career_grid_avg"], stats["circuit_grid_skill"]
+            ]
+            X_q = pd.DataFrame([input_q], columns=[
+                "team_id", "driver_id", "year",
+                "form_grid", "circuit_importance", "circuit_id",
+                "career_grid_avg", "circuit_grid_skill"
+            ])
             pred_grid = model_qualif.predict(X_q)[0]
-            
-            # choix de la grille
+
             grid_input = pred_grid
             if use_real_grid and "grid" in row and not pd.isna(row["grid"]):
                 grid_input = row["grid"]
-            
-            # Etape 2 : on utilise la grille choisie pour prédire la course
-            X_r = pd.DataFrame(
-                [[grid_input, t_id, d_id, year, stats["form_race"], impact_val, c_id, stats["career_race_avg"], stats["circuit_race_skill"]]],
-                columns=["grid", "team_id", "driver_id", "year", "form_race", "circuit_importance", "circuit_id", "career_race_avg", "circuit_race_skill"],
-            )
+
+            # Course
+            input_r = [
+                grid_input, t_id, d_id, year,
+                stats["form_race"], impact_val, c_id,
+                stats["career_race_avg"], stats["circuit_race_skill"],
+                stats["career_race_pace"], stats["career_best_lap"], stats["career_pit_loss"]
+            ]
+            X_r = pd.DataFrame([input_r], columns=[
+                "grid", "team_id", "driver_id", "year",
+                "form_race", "circuit_importance", "circuit_id",
+                "career_race_avg", "circuit_race_skill",
+                "career_race_pace", "career_best_lap", "career_pit_loss"
+            ])
             pred_race = model_race.predict(X_r)[0]
 
             simulation_results.append({
@@ -304,43 +366,67 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             })
         except Exception:
             continue
-    
+
     return pd.DataFrame(simulation_results)
 
 
-# fonction principale (appelée par main.py)
+# ---------------------------------------------------------
+# 8) FONCTION PRINCIPALE
+# ---------------------------------------------------------
 def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=False):
-    # calcul des formes récentes, de l'importance du circuit et de l'historique
+    print(f"\n--- MACHINE LEARNING : {gp_name} ({target_year}) ---")
+    
+    # 1) Enrichissement
     df = add_dual_form(df)
     df = add_circuit_impact(df)
+    df = add_fastf1_features(df)
     df = add_driver_history(df)
 
-    # encodage global
+    # 2) Encodage
     df_clean, le_driver, le_team, le_circuit = encode_data(df)
 
-    # séparation temporelle (on apprend sur le passé)
+    # 3) Split
     mask_train = (df_clean["year"] < target_year) | ((df_clean["year"] == target_year) & (df_clean["round"] < target_round))
     df_train = df_clean[mask_train]
 
-    # entraînement
     models = train_models(df_train)
+    print("   -> Modèles entraînés.")
 
-    # récupération dynamique des participants
+    # 4) Grille
     target_list = get_race_participants(df, target_year, target_round)
+    
     if target_list.empty:
-        print("Erreur : impossible de trouver une liste de pilotes.")
+        print("❌ Erreur : Liste des participants vide.")
         return
 
-    # prédiction
-    results = predict_race_outcome(models, target_list, target_year, target_round, le_driver, le_team, le_circuit, df, use_real_grid)
+    # Gestion grille réelle
+    has_grid_in_main = "grid" in target_list.columns and target_list["grid"].notna().any()
+    has_grid_in_latest = has_real_qualifying(target_year, target_round)
 
-    # mise en forme intelligente
+    if use_real_grid:
+        if has_grid_in_main:
+            pass
+        elif has_grid_in_latest:
+            target_list = load_real_qualifying(target_year, target_round)
+        else:
+            print("❗Grille réelle indisponible. Passage en mode Grille IA.")
+            use_real_grid = False
+
+    # 5) Prédiction
+    results = predict_race_outcome(
+        models, target_list, target_year, target_round,
+        le_driver, le_team, le_circuit, df, use_real_grid
+    )
+    
+    if results.empty:
+        print("❌ Erreur : Aucune prédiction générée.")
+        return
+
+    # 6) Affichage
     results = results.sort_values("Grid_Input")
     results["Grille"] = range(1, len(results) + 1)
-
     results = results.sort_values("Course_Score")
     results["Pos"] = range(1, len(results) + 1)
-        
     results["Delta"] = results["Grille"] - results["Pos"]
     results = results.sort_values("Pos")
 

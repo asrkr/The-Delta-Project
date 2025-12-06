@@ -2,25 +2,39 @@ import pandas as pd
 import requests
 import time
 import os
+import fastf1
+import numpy as np
 
-# on récupère les dossiers
+# -------------------------------------------------------------------
+# PATHS
+# -------------------------------------------------------------------
+
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "data")
+CACHE_DIR = os.path.join(DATA_DIR, "fastf1_cache")
+
 RESULTS_CSV_PATH = os.path.join(DATA_DIR, "f1_data_complete.csv")
 CALENDAR_CSV_PATH = os.path.join(DATA_DIR, "races_calendar.csv")
+EXTRA_CSV_PATH = os.path.join(DATA_DIR, "f1_extra_features.csv")
+QUALI_CSV_PATH = os.path.join(DATA_DIR, "latest_qualifying.csv")
 
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR)
 
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+fastf1.Cache.enable_cache(CACHE_DIR)
+
+# -------------------------------------------------------------------
+# ERGAST — FETCH
+# -------------------------------------------------------------------
 
 def _fetch_race_result(url):
-    max_retries = 4
-    attempt = 0
-    while attempt < max_retries:
+    for attempt in range(4):
         try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
+            r = requests.get(url, timeout=10)
+
+            if r.status_code == 200:
+                data = r.json()
                 races = data["MRData"]["RaceTable"]["Races"]
                 if not races:
                     return "END_OF_SEASON"
@@ -36,179 +50,387 @@ def _fetch_race_result(url):
                 df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
                 df["position"] = pd.to_numeric(df["position"], errors="coerce")
                 
-                # Filtrage des colonnes existantes
-                cols_ok = ["DriverName", "Team", "grid", "position", "status", "points"]
+                # Filtrage des colonnes existantes (ajout de points)
+                cols_ok = ["DriverName", "Team", "grid", "position", "status", "points", "circuitId"]
                 final_cols = [c for c in cols_ok if c in df.columns]
+                
                 return df[final_cols]
 
-            elif response.status_code == 429:
-                wait_time = (attempt + 1) * 5
-                time.sleep(wait_time)
-                attempt += 1
-                continue
+            elif r.status_code == 429:
+                time.sleep((attempt + 1) * 5)
             else:
                 time.sleep(2)
-                attempt += 1
-        except Exception:
+        except:
             time.sleep(2)
-            attempt += 1
     return None
 
 
+def fetch_qualifying_results(year, rnd):
+    """
+    Récupère la grille réelle (Q3) depuis l'API Ergast.
+    """
+    url = f"https://api.jolpi.ca/ergast/f1/{year}/{rnd}/qualifying.json"
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code != 200:
+            return None
+            
+        races = r.json()["MRData"]["RaceTable"]["Races"]
+        if not races:
+            return None
+            
+        quali_results = races[0].get("QualifyingResults", [])
+        if not quali_results:
+            return None
+            
+        df = pd.DataFrame(quali_results)
+        
+        # Extraction propre
+        df["DriverName"] = df["Driver"].apply(lambda x: x.get("familyName", ""))
+        df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
+        
+        # IMPORTANT : On harmonise le nom de la colonne pour le reste du pipeline
+        df["grid"] = pd.to_numeric(df["position"], errors="coerce")
+        
+        # CORRECTION : On ajoute l'année et le round pour pouvoir filtrer plus tard !
+        df["year"] = year
+        df["round"] = rnd
+        
+        return df[["DriverName", "Team", "grid", "year", "round"]]
+        
+    except Exception as e:
+        print(f"Erreur fetch quali : {e}")
+        return None
+
+
+def update_latest_qualifying(year, rnd):
+    df = fetch_qualifying_results(year, rnd)
+    if df is None:
+        return False
+    # On écrase le fichier pour ne garder que la dernière demande (plus simple)
+    df.to_csv(QUALI_CSV_PATH, index=False)
+    return True
+
+
+def has_real_qualifying(year: int, rnd: int) -> bool:
+    if not os.path.exists(QUALI_CSV_PATH):
+        return False
+    try:
+        df_q = pd.read_csv(QUALI_CSV_PATH)
+        # Vérifie si le fichier contient bien les colonnes requises
+        if "year" not in df_q.columns or "round" not in df_q.columns:
+            return False
+        mask = (df_q["year"] == year) & (df_q["round"] == rnd)
+        return not df_q[mask].empty
+    except:
+        return False
+
+
+def load_real_qualifying(year, rnd):
+    if not os.path.exists(QUALI_CSV_PATH):
+        return pd.DataFrame()
+    
+    df_q = pd.read_csv(QUALI_CSV_PATH)
+    
+    # CORRECTION : Utilisation de 'year' au lieu de 'y'
+    mask = (df_q["year"] == year) & (df_q["round"] == rnd)
+    quali = df_q[mask].copy()
+    
+    # On garde les colonnes utiles
+    cols = [c for c in ["DriverName", "Team", "grid", "year", "round"] if c in quali.columns]
+    return quali[cols]
+
+
+# -------------------------------------------------------------------
+# ERGAST — UPDATE WITH MERGE (incremental)
+# -------------------------------------------------------------------
+
 def update_database(start_year=2001, end_year=2025):
-    print(f"Mise à jour complète ({start_year}-{end_year})...")
+    print(f"📌 Mise à jour résultats Ergast {start_year}-{end_year}")
     all_races = []
+    
     for year in range(start_year, end_year + 1):
-        print(f"Saison {year}...", end=" ")
+        print(f" Saison {year}...", end=" ")
         cpt = 0
-        for round_num in range(1, 26):
-            url = f"https://api.jolpi.ca/ergast/f1/{year}/{round_num}/results.json"
+        for rnd in range(1, 26):
+            url = f"https://api.jolpi.ca/ergast/f1/{year}/{rnd}/results.json"
             result = _fetch_race_result(url)
+            
             if isinstance(result, str) and result == "END_OF_SEASON":
                 break
             elif isinstance(result, pd.DataFrame):
                 result["year"] = year
-                result["round"] = round_num
+                result["round"] = rnd
                 all_races.append(result)
                 cpt += 1
-            time.sleep(0.8)
+            
+            time.sleep(0.7)
         print(f"({cpt} courses)")
 
-    if all_races:
-        df_final = pd.concat(all_races, ignore_index=True)
-        df_final.to_csv(RESULTS_CSV_PATH, index=False)
-        print(f"Sauvegardé : {RESULTS_CSV_PATH}")
-    else:
-        print("Aucune donnée.")
-
-
-# NOUVELLE FONCTION : Télécharge une seule saison et met à jour le fichier existant
-def download_single_season(year):
-    print(f"Téléchargement saison {year}...")
-    new_races = []
-    
-    for round_num in range(1, 26):
-        url = f"https://api.jolpi.ca/ergast/f1/{year}/{round_num}/results.json"
-        result = _fetch_race_result(url)
-        
-        if isinstance(result, str) and result == "END_OF_SEASON":
-            break
-        elif isinstance(result, pd.DataFrame):
-            result["year"] = year
-            result["round"] = round_num
-            new_races.append(result)
-            print(f"Round {round_num}: OK")
-        time.sleep(0.8)
-
-    if not new_races:
-        print("Aucune donnée.")
+    if not all_races:
+        print("❌ Aucune donnée téléchargée.")
         return
 
-    df_new_season = pd.concat(new_races, ignore_index=True)
-    
-    # Fusion avec l'existant
+    df_new = pd.concat(all_races, ignore_index=True)
+
     if os.path.exists(RESULTS_CSV_PATH):
-        df_total = pd.read_csv(RESULTS_CSV_PATH)
-        # On supprime les anciennes données de cette année pour éviter les doublons
-        df_total = df_total[df_total["year"] != year]
-        df_final = pd.concat([df_total, df_new_season], ignore_index=True)
+        df_old = pd.read_csv(RESULTS_CSV_PATH)
+        # On supprime les anciennes données de la plage mise à jour pour éviter doublons
+        df_old = df_old[(df_old["year"] < start_year) | (df_old["year"] > end_year)]
+        df_final = pd.concat([df_old, df_new], ignore_index=True)
     else:
-        df_final = df_new_season
+        df_final = df_new
 
-    df_final = df_final.sort_values(by=["year", "round"])
+    # Tri et sauvegarde
+    if "grid" in df_final.columns:
+        df_final = df_final.sort_values(["year", "round", "grid"])
+    else:
+        df_final = df_final.sort_values(["year", "round"])
+        
     df_final.to_csv(RESULTS_CSV_PATH, index=False)
-    print(f"Mise à jour terminée pour {year}.")
+    print(f"✔️ Sauvegardé → {RESULTS_CSV_PATH}")
 
+
+# -------------------------------------------------------------------
+# CALENDAR
+# -------------------------------------------------------------------
 
 def update_calendar(start_year=2001, end_year=2025):
-    print(f"Mise à jour calendrier ({start_year}-{end_year})...")
-    all_schedules = []
+    print(f"📌 Mise à jour calendrier {start_year}-{end_year}")
+    data = []
+    
     for year in range(start_year, end_year+1):
         url = f"https://api.jolpi.ca/ergast/f1/{year}.json"
         try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                races = data["MRData"]["RaceTable"]["Races"]
-                for race in races:
-                    all_schedules.append({
-                        "year": int(race["season"]),
-                        "round": int(race["round"]),
-                        "raceName": race["raceName"],
-                        "circuitId": race["Circuit"]["circuitId"],
-                        "date": race["date"]
-                    })
-        except Exception: 
+            r = requests.get(url, timeout=10)
+            races = r.json()["MRData"]["RaceTable"]["Races"]
+            for race in races:
+                data.append({
+                    "year": int(race["season"]),
+                    "round": int(race["round"]),
+                    "raceName": race["raceName"],
+                    "circuitId": race["Circuit"]["circuitId"],
+                    "date": race["date"]
+                })
+        except:
             pass
-        time.sleep(1)
-    pd.DataFrame(all_schedules).to_csv(CALENDAR_CSV_PATH, index=False)
-    print("Calendrier mis à jour.")
+        time.sleep(0.5)
+        
+    pd.DataFrame(data).to_csv(CALENDAR_CSV_PATH, index=False)
+    print("✔️ Calendrier mis à jour.")
 
+
+# -------------------------------------------------------------------
+# FASTF1 — incrementally append to EXTRA CSV
+# -------------------------------------------------------------------
+
+
+def extract_fastf1_features(start_year: int, end_year: int):
+    import fastf1
+    import numpy as np
+
+    print(f"📌 Extraction FastF1 v1.6 (données avancées) {start_year}-{end_year}")
+    all_entries = []
+
+    if not os.path.exists(CALENDAR_CSV_PATH):
+        print("Calendrier manquant → génération...")
+        update_calendar(start_year, end_year)
+
+    calendar = pd.read_csv(CALENDAR_CSV_PATH)
+
+    for year in range(start_year, end_year + 1):
+        season = calendar[calendar["year"] == year]
+        if season.empty:
+            continue
+
+        print(f" Saison {year}")
+        for _, race in season.iterrows():
+            rnd = int(race["round"])
+            print(f"  -> Round {rnd}")
+
+            try:
+                session = fastf1.get_session(year, rnd, "R")
+                session.load(telemetry=False, weather=False)
+                laps = session.laps
+                drivers = session.drivers
+            except Exception as e:
+                print(" ⚠️ FastF1 Error:", e)
+                continue
+
+            for d in drivers:
+                drv_laps = laps.pick_drivers([d])
+                if drv_laps.empty:
+                    continue
+
+                drv_info = session.get_driver(d)
+
+                entry = {
+                    "year": year,
+                    "round": rnd,
+                    "DriverNumber": d,
+                    "DriverName": drv_info.get("FullName", ""),
+                    "Team": drv_info.get("TeamName", "")
+                }
+
+                # =============================
+                # GLOBAL PACE
+                # =============================
+                lap_times = drv_laps["LapTime"].dt.total_seconds().dropna()
+                if lap_times.empty:
+                    continue
+
+                entry["avg_race_pace"] = lap_times.mean()
+                entry["best_lap"] = lap_times.min()
+
+                # =============================
+                # PIT STOPS / PIT LOSS (ROBUSTE)
+                # =============================
+                pit_mask = drv_laps["PitOutTime"].notna() | drv_laps["PitInTime"].notna()
+                entry["pitstops_count"] = pit_mask.sum()
+
+                median_pace = lap_times.median()
+                pit_losses = (lap_times[pit_mask] - median_pace).clip(lower=0)
+
+                entry["mean_pit_loss"] = (
+                    pit_losses.mean() if not pit_losses.empty else np.nan
+                )
+
+                # =============================
+                # STINTS
+                # =============================
+                stints = drv_laps["Stint"].dropna().astype(int)
+                stint_ids = sorted(stints.unique())
+                entry["stint_count"] = len(stint_ids)
+
+                def stint_compound(stint_id):
+                    subset = drv_laps[drv_laps["Stint"] == stint_id]
+                    compounds = subset["Compound"].dropna().unique()
+                    return compounds[0] if len(compounds) else None
+
+                for idx, stint_id in enumerate(stint_ids[:3], start=1):
+                    subset = drv_laps[drv_laps["Stint"] == stint_id]
+                    entry[f"stint{idx}_length"] = len(subset)
+                    entry[f"stint{idx}_avg"] = subset["LapTime"].dt.total_seconds().mean()
+                    entry[f"stint{idx}_compound"] = stint_compound(stint_id)
+
+                # compléter les stints manquants
+                for idx in range(len(stint_ids) + 1, 4):
+                    entry[f"stint{idx}_length"] = np.nan
+                    entry[f"stint{idx}_avg"] = np.nan
+                    entry[f"stint{idx}_compound"] = None
+
+                entry["compound_first_stint"] = entry.get("stint1_compound")
+
+                # =============================
+                # COMPOUND CHANGES
+                # =============================
+                compounds_clean = drv_laps["Compound"].ffill()
+                entry["compound_changes"] = (
+                    compounds_clean.ne(compounds_clean.shift()).sum() - 1
+                )
+
+                # =============================
+                # GLOBAL DEGRADATION
+                # =============================
+                try:
+                    first_avg = entry.get("stint1_avg")
+                    last_avg = entry.get(f"stint{entry['stint_count']}_avg")
+                    entry["degradation_global"] = (
+                        last_avg - first_avg
+                        if first_avg is not None and last_avg is not None
+                        else np.nan
+                    )
+                except Exception:
+                    entry["degradation_global"] = np.nan
+
+                # =============================
+                # CONSISTENCY
+                # =============================
+                entry["long_run_consistency"] = lap_times.std()
+
+                all_entries.append(entry)
+
+    # =============================
+    # SAVE (INCREMENTAL)
+    # =============================
+    if not all_entries:
+        print("⚠️ Aucune donnée FastF1 extraite.")
+        return
+
+    df_new = pd.DataFrame(all_entries)
+
+    if os.path.exists(EXTRA_CSV_PATH):
+        df_old = pd.read_csv(EXTRA_CSV_PATH)
+        df_old = df_old[
+            (df_old["year"] < start_year) | (df_old["year"] > end_year)
+        ]
+        df_final = pd.concat([df_old, df_new], ignore_index=True)
+    else:
+        df_final = df_new
+
+    df_final.to_csv(EXTRA_CSV_PATH, index=False)
+    print(f"✔️ Enrichissement FastF1 → {EXTRA_CSV_PATH}")
+
+
+# -------------------------------------------------------------------
+# LOAD + UTILS
+# -------------------------------------------------------------------
 
 def load_data():
-    if os.path.exists(RESULTS_CSV_PATH):
-        return pd.read_csv(RESULTS_CSV_PATH)
-    else:
+    if not os.path.exists(RESULTS_CSV_PATH):
         print("Fichier introuvable.")
         return None
+    
+    df = pd.read_csv(RESULTS_CSV_PATH)
+
+    # --- 🔥 AJOUT AUTOMATIQUE DE circuitId VIA LE CALENDRIER ---
+    if os.path.exists(CALENDAR_CSV_PATH):
+        cal = pd.read_csv(CALENDAR_CSV_PATH)
+        # merge sécurisé
+        if "circuitId" not in df.columns:
+            df = df.merge(
+                cal[["year", "round", "circuitId"]],
+                on=["year", "round"],
+                how="left"
+            )
+    else:
+        print("⚠️ Calendrier manquant, exécution update_calendar()...")
+        update_calendar()
+        cal = pd.read_csv(CALENDAR_CSV_PATH)
+        df = df.merge(
+            cal[["year", "round", "circuitId"]],
+            on=["year", "round"],
+            how="left"
+        )
+
+    return df
+
+
+def load_extra_features():
+    return pd.read_csv(EXTRA_CSV_PATH) if os.path.exists(EXTRA_CSV_PATH) else None
 
 
 def get_rounds_for_race(race_name_keyword):
     if not os.path.exists(CALENDAR_CSV_PATH):
+        print("Calendrier introuvable.\nTéléchargement...")
         update_calendar()
-    try:
-        df = pd.read_csv(CALENDAR_CSV_PATH)
-        filtered = df[df["raceName"].str.contains(race_name_keyword, case=False, na=False)]
-        if filtered.empty: return {}, None
-        return dict(zip(filtered["year"], filtered["round"])), filtered.iloc[0]["raceName"]
-    except: return {}, None
+        
+    df = pd.read_csv(CALENDAR_CSV_PATH)
+    filtered = df[df["raceName"].str.contains(race_name_keyword, case=False, na=False)]
+    
+    if filtered.empty:
+        print(f'Aucune course trouvée avec le nom "{race_name_keyword}".')
+        return {}, None
+        
+    return dict(zip(filtered["year"], filtered["round"])), filtered.iloc[0]["raceName"]
 
 
-# v1.4 : nouvelle fonction pour récupérer la grille des pilotes
-def get_race_participants(df, target_year, target_round):
-    # 1 : on cherche la course exacte
-    participants = df[
-        (df["year"] == target_year) &
-        (df["round"] == target_round)
-    ].sort_values("grid")
-
-    if not participants.empty:
-        # cas 1 : historique trouvé
+def get_race_participants(df, year, rnd):
+    r = df[(df["year"] == year) & (df["round"] == rnd)].sort_values("grid")
+    if not r.empty:
+        # On renvoie les participants trouvés dans l'historique
         cols = ["DriverName", "Team"]
-        if "grid" in participants.columns:
-            cols.append("grid")
-        return participants[cols].drop_duplicates()
-    # 2 : cas futur, on cherche la dernière course disponible de la même année
-    same_year_races = df[df["year"] == target_year]
-
-    if not same_year_races.empty:
-         # on prend le round max de cette année
-         last_round = same_year_races["round"].max()
-         fallback = same_year_races[same_year_races["round"] == last_round]
-         return fallback[["DriverName", "Team"]].drop_duplicates()
-    
-    # 3 : cas de nouvelle saison : on prend la dernière course de l'année dernière
-    prev_year_races = df[df["year"] == target_year - 1]
-
-    if not prev_year_races.empty:
-        last_round = prev_year_races["round"].max()
-        fallback = prev_year_races[prev_year_races["round"] == last_round]
-        return fallback[["DriverName", "Team"]].drop_duplicates()
-    
-    return pd.DataFrame()  # rien trouvé
-
-
-if __name__ == "__main__":
-    print("1. Télécharger une saison spécifique")
-    print("2. Mise à jour complète (2001-2025)")
-    print("3. Mettre à jour le calendrier")
-    
-    choix = input("Choix : ")
-    
-    if choix == "1":
-        annee = int(input("Année : "))
-        download_single_season(annee)
-    elif choix == "2":
-        update_database()
-    elif choix == "3":
-        update_calendar()
+        if "grid" in r.columns: cols.append("grid")
+        return r[cols].drop_duplicates()
+        
+    return pd.DataFrame()
