@@ -1,7 +1,12 @@
-# Modular update manager for Ergast + FastF1
-
+import os
 from src.data_manager import update_database, update_calendar, extract_fastf1_features, update_latest_qualifying
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "data")
+CACHE_DIR = os.path.join(DATA_DIR, "fastf1_cache")
+
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 if __name__ == "__main__":
     print("1. Update Ergast results")
@@ -11,6 +16,7 @@ if __name__ == "__main__":
     print("5. Update FastF1 extra features (only one season): ")
     print("6. Update the latest grid: ")
     print("7. Update ALL")
+    print("8) Exit")
 
     choice = int(input("Choice: "))
 
@@ -60,6 +66,10 @@ if __name__ == "__main__":
         update_database(y1, y3)
         update_calendar(y1, y3)
         extract_fastf1_features(y2, y3)
+    
+
+    elif choice == 8:
+        exit()
 
     
     else:
