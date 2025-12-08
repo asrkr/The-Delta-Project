@@ -43,7 +43,7 @@ def _fetch_race_result(url):
                 
                 # Sécurisation avec .get pour éviter les erreurs sur les vieilles saisons
                 if "Driver" in df.columns:
-                    df["DriverName"] = df["Driver"].apply(lambda x: x.get("familyName", ""))
+                    df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get("givenName", "")} {x.get("familyName", "")}".strip())
                 if "Constructor" in df.columns:
                     df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
                 
@@ -86,7 +86,7 @@ def fetch_qualifying_results(year, rnd):
         df = pd.DataFrame(quali_results)
         
         # Extraction propre
-        df["DriverName"] = df["Driver"].apply(lambda x: x.get("familyName", ""))
+        df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get("givenName", "")} {x.get("familyName", "")}".strip())
         df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
         
         # IMPORTANT : On harmonise le nom de la colonne pour le reste du pipeline
