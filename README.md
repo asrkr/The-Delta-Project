@@ -34,6 +34,27 @@ The Greek initial for Delphi is **Delta** ($\Delta$). It fits perfectly as a dou
 
 ---
 
+## 🧠 Model Philosophy
+
+The Delta Project is designed to **model F1 performance, not randomness**.
+
+The system assumes that:
+- Race outcomes are primarily driven by **driver skill, car performance, track characteristics, and strategic efficiency**.
+- Grid position is a critical but **not absolute determinant**, depending on circuit-specific constraints.
+- Telemetry data (pace, degradation, pit loss) provides a **truer signal of race execution** than finishing positions alone.
+
+The model deliberately avoids:
+- Lap-by-lap simulation.
+- Stochastic events (crashes, safety cars, mechanical DNFs).
+- Short-term “noise-driven” correlations.
+
+Instead, The Delta Project focuses on **learning stable performance deltas** (`Δ`) between drivers and teams across races, seasons, and circuits.
+
+Predictions should therefore be interpreted as:
+> *“Most likely outcome given equal conditions and no major external disruption.”*
+
+---
+
 ## 🛠️ Tech Stack
 
 * **Language:** Python 3.13.7
