@@ -158,24 +158,21 @@ def add_driver_history(df):
         med = df[c].median()
         val = 0.0 if pd.isna(med) else med
         df[c] = df[c].fillna(df.groupby("DriverKey")[c].transform("median"))
-    
-    df["expected_finish_from_grid"] = (
-        df.groupby("circuitId")["grid"]
-        .transform(lambda x: x.shift(1).expanding().mean())
-    )
-    df["expected_finish_from_grid"] = df["expected_finish_from_grid"].fillna(df["grid"])
-
-    df["grid_delta"] = df["grid"] - df["expected_finish_from_grid"]
-
-    grid_mean = df.groupby("circuitId")["grid"].transform("mean")
-    grid_std = df.groupby("circuitId")["grid"].transform("std").replace(0, 1)
-
-    df["grid_z"] = (df["grid"] - grid_mean) / grid_std
-    df["grid_z"] = df["grid_z"].fillna(0.0)
 
     df["pace_rank_season"] = (df.groupby(["year"])["career_race_pace"].rank(method="dense"))
     df["pace_rank_season"] = (df.groupby("year")["pace_rank_season"].transform(lambda x: x / x.max()))
     df["pace_rank_season"] = df["pace_rank_season"].fillna(0.5)
+
+    df["expected_race_rank"] = (
+        0.45 * df["career_race_avg"] +
+        0.25 * df["form_race"] +
+        0.20 * df["circuit_race_skill"] +
+        0.10 * df["pace_rank_season"] * 20
+    )
+    df["expected_race_rank"] = df["expected_race_rank"].fillna(df["career_race_avg"])
+
+    df["grid_contextual_delta"] = df["grid"] - df["expected_race_rank"]
+    df["grid_contextual_delta"] = df["grid_contextual_delta"].clip(-10, 10)
 
     return df
 
@@ -249,10 +246,13 @@ def train_models(df_train):
 
     # Liste Course (AVEC LES FEATURES FASTF1)
     features_race = [
-        "form_race", "career_race_avg",
+        "form_race",
+        "grid_contextual_delta",
+        "career_race_avg",
         "pace_rank_season",
         "team_id", "driver_id", "year", 
-        "circuit_importance", "circuit_id", "circuit_race_skill",
+        "circuit_importance", "circuit_id",
+        "circuit_race_skill",
         "career_race_pace", "career_best_lap", "career_pit_loss"
     ]
     features_race = [f for f in features_race if f in df_train.columns]
@@ -371,22 +371,26 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             if use_real_grid and "grid" in row and not pd.isna(row["grid"]):
                 grid_input = row["grid"]
 
-            # ===== ÉTAPE 1 — CONTEXTUALISATION DU GRID =====
-            expected_finish = stats["career_grid_avg"]
-            grid_delta = grid_input - expected_finish
+            # ===== Expected race rank (lookahead-free) =====
+            expected_race_rank = (
+                0.45 * stats["career_race_avg"] +
+                0.25 * stats["form_race"] +
+                0.20 * stats["circuit_race_skill"] +
+                0.10 * stats["pace_rank_season"] * 20
+            )
 
-            grid_mean = drivers_df["grid"].mean()
-            grid_std = grid_std = full_df[
-                (full_df["year"] < year) |
-                ((full_df["year"] == year) & (full_df["round"] < target_round))
-            ]["grid"].std()
-            if pd.isna(grid_std) or grid_std == 0.0:
-                grid_std == 1.0
-            grid_z = (grid_input - grid_mean) / grid_std
+            # sécurité
+            if pd.isna(expected_race_rank):
+                expected_race_rank = stats["career_race_avg"]
+
+            # ===== Grid delta soft =====
+            grid_contextual_delta = grid_input - expected_race_rank
+            grid_contextual_delta = np.clip(grid_contextual_delta, -10, 10)
 
             # ===== COURSE =====
             X_r = pd.DataFrame([[
                 stats["form_race"],
+                grid_contextual_delta,
                 stats["career_race_avg"],
                 stats["pace_rank_season"],
                 t_id, d_id, year,
@@ -396,7 +400,10 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
                 stats["career_best_lap"],
                 stats["career_pit_loss"]
             ]], columns=[
-                "form_race", "career_race_avg", "pace_rank_season",
+                "form_race",
+                "grid_contextual_delta",
+                "career_race_avg",
+                "pace_rank_season",
                 "team_id", "driver_id", "year",
                 "circuit_importance", "circuit_id",
                 "circuit_race_skill",
