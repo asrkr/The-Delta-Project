@@ -1,63 +1,88 @@
-# 📜 Changelog – The Delta Project
+# Changelog — The Delta Project
 
-This document tracks the evolution of the model’s logic and capabilities.
-It focuses on **what intelligence was added** at each stage, not implementation details.
-
----
-
-## [V1.6] – Strategy-aware & Robust Pipeline
-
-### Summary
-V1.6 focuses on **race execution realism and robustness**.
-The model moves beyond pure grid/finish relationships and integrates race-pace context while preserving stability.
-
-### Key changes
-- Integration of **FastF1 race-pace features** (average pace, best lap, consistency).
-- Introduction of a **robust pit loss estimation**, used as a career-level signal rather than event noise.
-- Improved handling of missing or partial FastF1 data (graceful fallbacks).
-- Unified feature pipeline between **production model and hyperparameter tuning**.
-- Backend handling of **real qualifying grids** when available (no user intervention required).
-- Significant stabilization of predictions across seasons and circuits.
-
-### Impact
-- Improved realism in race outcome predictions.
-- Reduced volatility between similar drivers.
-- Better discrimination between strategic strength and raw performance.
+All notable changes to this project are documented in this file.  
+The project follows an **iterative, benchmark-driven development approach**.
 
 ---
 
-## [V1.5] – Domain Intelligence
+## [v1.6] — Telemetry & Robustness (Frozen)
 
-### Summary
-V1.5 introduced **F1-specific reasoning** into the model.
-Predictions are no longer purely statistical, but context-aware.
+### Added
+- Integration of **FastF1 telemetry data**:
+  - Average race pace
+  - Best lap time
+  - Pit stop count
+  - Mean pit time loss
+- Advanced feature engineering pipeline
+- Full **driver identity unification** between Ergast & FastF1:
+  - Normalized `DriverKey`
+  - Robust handling of historical name collisions (e.g. Verstappen, Schumacher)
+- Optional **real qualifying grid injection** for race prediction
+- Full **season walk-forward simulation pipeline**
+- Automatic feature importance analysis
+- End-to-end hyperparameter tuning via pipeline tuner
 
-### Key changes
-- Driver **recent form** (rolling average over previous races).
-- **Circuit importance** based on historical grid-to-finish correlation.
-- Driver **career averages**, including circuit-specific skills.
-- Walk-forward evaluation and automated **hyperparameter tuning**.
-- Clear separation between training data and prediction race.
+### Machine Learning
+- Core model: `RandomForestRegressor`
+- Decoupled models:
+  - Qualifying prediction
+  - Race outcome prediction
+- Experimental features tested:
+  - `grid_delta`
+  - grid normalization
+  - `pace_rank_season`
+  - `expected_race_rank` / contextual grid deltas
+- Systematic evaluation of each feature via season benchmarks
 
-### Impact
-- Major accuracy gains in winner and Top-3 predictions.
-- Strong reduction in Mean Absolute Error (MAE).
-- Model begins to reflect real F1 dynamics (track position sensitivity).
+### Results (reference season)
+- **IA-only (no real grid)**
+  - Winner accuracy ≈ 29–33%
+  - MAE ≈ 4.1
+- **With real grid**
+  - Winner accuracy ≈ 58–63%
+  - Top 3 ≈ 43–46%
+  - MAE ≈ 3.4
+
+**Conclusion:**  
+Race grid position remains the dominant variable in Formula 1.  
+The v1.6 model is now **robust, explainable and stable**, but bounded by the limitations of RandomForest on ranking-heavy problems.
+
+### Known limitations
+- Strong dependency on grid whenever available
+- IA-only performance slightly below v1.5
+- RandomForest limitations:
+  - poor learning-to-rank behavior
+  - no probabilistic output
+  - limited interaction modeling
+
+👉 Version **v1.6 is frozen** and serves as the stable baseline for the next major iteration.
 
 ---
 
-## [V1.4] – Foundations
+## [v1.5] — Domain Intelligence
 
-### Summary
-Core pipeline and dataset construction.
+### Added
+- Driver recent form (rolling average)
+- Career-long driver statistics
+- Circuit-specific driver skills
+- Circuit grid impact estimation
+- First automated hyperparameter tuning
 
-### Key changes
-- Incremental Ergast scraping (2001–present).
-- Clean historical race dataset.
-- First Random Forest pipeline for qualifying and race predictions.
-- Dynamic participant retrieval per race.
-- Initial performance metrics (Top-K accuracy, MAE).
+### Notes
+- Strong performance with real grids
+- Reduced robustness in unseen conditions
 
-### Impact
-- Stable base for all future iterations.
-- Enabled rapid experimentation and feature iteration.
+---
+
+## [v1.4] — Foundations
+
+### Added
+- Full Ergast scraping (2001–2025)
+- End-to-end ML pipeline
+- Race-by-race simulation
+- Advanced evaluation metrics:
+  - MAE
+  - Top 3 / Top 5 / Top 10
+- Modular project architecture
+
+---
