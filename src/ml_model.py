@@ -173,6 +173,10 @@ def add_driver_history(df):
     df["grid_z"] = (df["grid"] - grid_mean) / grid_std
     df["grid_z"] = df["grid_z"].fillna(0.0)
 
+    df["pace_rank_season"] = (df.groupby(["year"])["career_race_pace"].rank(method="dense"))
+    df["pace_rank_season"] = (df.groupby("year")["pace_rank_season"].transform(lambda x: x / x.max()))
+    df["pace_rank_season"] = df["pace_rank_season"].fillna(0.5)
+
     return df
 
 
@@ -245,13 +249,11 @@ def train_models(df_train):
 
     # Liste Course (AVEC LES FEATURES FASTF1)
     features_race = [
-        "grid",
-        "grid_z",
-        "grid_delta",
+        "form_race", "career_race_avg",
+        "pace_rank_season",
         "team_id", "driver_id", "year", 
-        "form_race", "circuit_importance", "circuit_id", 
-        "career_race_avg", "circuit_race_skill",
-        "career_race_pace", "career_best_lap", "career_pit_loss" # <-- Ici
+        "circuit_importance", "circuit_id", "circuit_race_skill",
+        "career_race_pace", "career_best_lap", "career_pit_loss"
     ]
     features_race = [f for f in features_race if f in df_train.columns]
 
@@ -259,7 +261,7 @@ def train_models(df_train):
     model_race.fit(df_train[features_race], df_train["position"])
 
     # === Feature Importances ===
-    
+    """
     qualif_importances = get_feature_importances(model_qualif, features_qualif)
     race_importances = get_feature_importances(model_race, features_race)
 
@@ -268,7 +270,7 @@ def train_models(df_train):
 
     print("\n🏁 Race Model — Feature Importances")
     print(race_importances.to_string(index=False))
-    
+    """
 
     return model_qualif, model_race
 
@@ -325,7 +327,8 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             "circuit_race_skill": 14.0,
             "career_race_pace": default_race_pace,
             "career_best_lap": default_best_lap,
-            "career_pit_loss": default_pit_loss
+            "career_pit_loss": default_pit_loss,
+            "pace_rank_season": 0.5
         }
 
         if not history.empty:
@@ -383,25 +386,19 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
 
             # ===== COURSE =====
             X_r = pd.DataFrame([[
-                grid_input,
-                grid_z,
-                grid_delta,
-                t_id, d_id, year,
                 stats["form_race"],
-                impact_val, c_id,
                 stats["career_race_avg"],
+                stats["pace_rank_season"],
+                t_id, d_id, year,
+                impact_val, c_id,
                 stats["circuit_race_skill"],
                 stats["career_race_pace"],
                 stats["career_best_lap"],
                 stats["career_pit_loss"]
             ]], columns=[
-                "grid",
-                "grid_z",
-                "grid_delta",
+                "form_race", "career_race_avg", "pace_rank_season",
                 "team_id", "driver_id", "year",
-                "form_race",
                 "circuit_importance", "circuit_id",
-                "career_race_avg",
                 "circuit_race_skill",
                 "career_race_pace",
                 "career_best_lap",
