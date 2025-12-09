@@ -163,17 +163,6 @@ def add_driver_history(df):
     df["pace_rank_season"] = (df.groupby("year")["pace_rank_season"].transform(lambda x: x / x.max()))
     df["pace_rank_season"] = df["pace_rank_season"].fillna(0.5)
 
-    df["expected_race_rank"] = (
-        0.45 * df["career_race_avg"] +
-        0.25 * df["form_race"] +
-        0.20 * df["circuit_race_skill"] +
-        0.10 * df["pace_rank_season"] * 20
-    )
-    df["expected_race_rank"] = df["expected_race_rank"].fillna(df["career_race_avg"])
-
-    df["grid_contextual_delta"] = df["grid"] - df["expected_race_rank"]
-    df["grid_contextual_delta"] = df["grid_contextual_delta"].clip(-10, 10)
-
     return df
 
 
@@ -213,21 +202,21 @@ def train_models(df_train):
     # Paramètres (Tu peux remettre les tiens ici)
     params_qualif = {
         "n_estimators": 200,
-        "max_depth": 10,
+        "max_depth": None,
         "min_samples_split": 6,
-        "min_samples_leaf": 3,
+        "min_samples_leaf": 1,
         "max_features": "sqrt",
         "bootstrap": False,
         "random_state": 42,
         "n_jobs": -1
     }
     params_race = {
-        "n_estimators": 1200,
-        "max_depth": 6,
-        "min_samples_split": 8,
-        "min_samples_leaf": 1,
+        "n_estimators": 200,
+        "max_depth": 18,
+        "min_samples_split": 6,
+        "min_samples_leaf": 8,
         "max_features": None,
-        "bootstrap": False,
+        "bootstrap": True,
         "random_state": 42,
         "n_jobs": -1
     }
@@ -246,8 +235,8 @@ def train_models(df_train):
 
     # Liste Course (AVEC LES FEATURES FASTF1)
     features_race = [
+        "grid",
         "form_race",
-        "grid_contextual_delta",
         "career_race_avg",
         "pace_rank_season",
         "team_id", "driver_id", "year", 
@@ -261,10 +250,10 @@ def train_models(df_train):
     model_race.fit(df_train[features_race], df_train["position"])
 
     # === Feature Importances ===
-    """
+    
     qualif_importances = get_feature_importances(model_qualif, features_qualif)
     race_importances = get_feature_importances(model_race, features_race)
-
+    """
     print("\n📊 Qualifying Model — Feature Importances")
     print(qualif_importances.to_string(index=False))
 
@@ -371,26 +360,10 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             if use_real_grid and "grid" in row and not pd.isna(row["grid"]):
                 grid_input = row["grid"]
 
-            # ===== Expected race rank (lookahead-free) =====
-            expected_race_rank = (
-                0.45 * stats["career_race_avg"] +
-                0.25 * stats["form_race"] +
-                0.20 * stats["circuit_race_skill"] +
-                0.10 * stats["pace_rank_season"] * 20
-            )
-
-            # sécurité
-            if pd.isna(expected_race_rank):
-                expected_race_rank = stats["career_race_avg"]
-
-            # ===== Grid delta soft =====
-            grid_contextual_delta = grid_input - expected_race_rank
-            grid_contextual_delta = np.clip(grid_contextual_delta, -10, 10)
-
             # ===== COURSE =====
             X_r = pd.DataFrame([[
+                grid_input,
                 stats["form_race"],
-                grid_contextual_delta,
                 stats["career_race_avg"],
                 stats["pace_rank_season"],
                 t_id, d_id, year,
@@ -400,8 +373,8 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
                 stats["career_best_lap"],
                 stats["career_pit_loss"]
             ]], columns=[
+                "grid",
                 "form_race",
-                "grid_contextual_delta",
                 "career_race_avg",
                 "pace_rank_season",
                 "team_id", "driver_id", "year",

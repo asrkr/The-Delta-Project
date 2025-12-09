@@ -4,6 +4,8 @@ import time
 import os
 import fastf1
 import numpy as np
+import unicodedata
+import re
 
 # -------------------------------------------------------------------
 # PATHS
@@ -24,6 +26,22 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 fastf1.Cache.enable_cache(CACHE_DIR)
 
+def make_driver_key(given_name: str, family_name: str) -> str:
+    if not given_name or not family_name:
+        return None
+    # nettoyage accents
+    def normalize(s):
+        s = unicodedata.normalize("NFKD", s)
+        s = s.encode("ascii", "ignore").decode("ascii")
+        s = re.sub(r"[^a-zA-Z]", "", s)
+        return s.lower()
+    g = normalize(given_name)
+    f = normalize(family_name)
+    if not g or not f:
+        return None
+    driver_key = f"{g[0]}_{f}"
+    return driver_key
+
 # -------------------------------------------------------------------
 # ERGAST — FETCH
 # -------------------------------------------------------------------
@@ -43,7 +61,7 @@ def _fetch_race_result(url):
                 
                 # Sécurisation avec .get pour éviter les erreurs sur les vieilles saisons
                 if "Driver" in df.columns:
-                    df["DriverKey"] = df["Driver"].apply(lambda x: x.get("familyName", "").lower())
+                    df["DriverKey"] = df["Driver"].apply(lambda x: make_driver_key(x.get("givenName", ""), x.get("familyName", "")))
                     df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get('givenName', '')} {x.get('familyName', '')}".strip())
                 if "Constructor" in df.columns:
                     df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
@@ -86,7 +104,7 @@ def fetch_qualifying_results(year, rnd):
         df = pd.DataFrame(quali_results)
         
         # Extraction propre
-        df["DriverKey"] = df["Driver"].apply(lambda x: x.get("familyName", "").lower())
+        df["DriverKey"] = df["Driver"].apply(lambda x: make_driver_key(x.get("givenName", ""), x.get("familyName", "")))
         df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get("givenName", "")} {x.get("familyName", "")}".strip())
         df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
         
@@ -265,11 +283,14 @@ def extract_fastf1_features(start_year: int, end_year: int):
 
                 drv_info = session.get_driver(d)
 
+                given_name = drv_info.get("FirstName", "")
+                family_name = drv_info.get("LastName", "")
+
                 entry = {
                     "year": year,
                     "round": rnd,
                     "DriverNumber": d,
-                    "DriverKey": drv_info.get("LastName", "").lower(),
+                    "DriverKey": make_driver_key(given_name, family_name),
                     "DriverName": drv_info.get("FullName", ""),
                     "Team": drv_info.get("TeamName", "")
                 }
