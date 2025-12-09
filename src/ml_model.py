@@ -167,6 +167,12 @@ def add_driver_history(df):
 
     df["grid_delta"] = df["grid"] - df["expected_finish_from_grid"]
 
+    grid_mean = df.groupby("circuitId")["grid"].transform("mean")
+    grid_std = df.groupby("circuitId")["grid"].transform("std").replace(0, 1)
+
+    df["grid_z"] = (df["grid"] - grid_mean) / grid_std
+    df["grid_z"] = df["grid_z"].fillna(0.0)
+
     return df
 
 
@@ -240,6 +246,7 @@ def train_models(df_train):
     # Liste Course (AVEC LES FEATURES FASTF1)
     features_race = [
         "grid",
+        "grid_z",
         "grid_delta",
         "team_id", "driver_id", "year", 
         "form_race", "circuit_importance", "circuit_id", 
@@ -365,9 +372,19 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             expected_finish = stats["career_grid_avg"]
             grid_delta = grid_input - expected_finish
 
+            grid_mean = drivers_df["grid"].mean()
+            grid_std = grid_std = full_df[
+                (full_df["year"] < year) |
+                ((full_df["year"] == year) & (full_df["round"] < target_round))
+            ]["grid"].std()
+            if pd.isna(grid_std) or grid_std == 0.0:
+                grid_std == 1.0
+            grid_z = (grid_input - grid_mean) / grid_std
+
             # ===== COURSE =====
             X_r = pd.DataFrame([[
                 grid_input,
+                grid_z,
                 grid_delta,
                 t_id, d_id, year,
                 stats["form_race"],
@@ -379,6 +396,7 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
                 stats["career_pit_loss"]
             ]], columns=[
                 "grid",
+                "grid_z",
                 "grid_delta",
                 "team_id", "driver_id", "year",
                 "form_race",
