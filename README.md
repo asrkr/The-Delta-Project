@@ -1,8 +1,8 @@
 # 🏎️ The Delta Project
 
-![Python](https://img.shields.io/badge/Python-3.13.7-blue?style=flat&logo=python)
-![Machine Learning](https://img.shields.io/badge/Model-RandomForest-green?style=flat&logo=scikit-learn)
-![Status](https://img.shields.io/badge/Status-V1.6_Telemetry-orange)
+![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat&logo=python)
+![Machine Learning](https://img.shields.io/badge/Model-RandomForest-yellow?style=flat&logo=scikit-learn)
+![Status](https://img.shields.io/badge/Status-V1.6_Stable-green)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
 
@@ -97,7 +97,7 @@ The AI’s predictions should be interpreted as:
 
 ## 🛠️ Tech Stack
 
-- **Language:** Python 3.13.7
+- **Language:** Python 3.13+
 - **Data:** Pandas, NumPy
 - **Machine Learning:** scikit-learn (`RandomForestRegressor`, `LabelEncoder`)
 - **Data Collection:**
@@ -116,7 +116,7 @@ The-Delta-Project/
 │   └── ml_model.py               # Feature engineering & ML models (qualif + race)
 │
 ├── main.py                       # Main entry point (single race prediction)
-├── update_data.py                # Maintenance script (update/refresh datasets)
+├── update_manager.py             # Maintenance script (update/refresh datasets)
 │
 └── README.md                     # You are here
 ````
