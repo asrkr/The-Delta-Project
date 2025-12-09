@@ -1,89 +1,108 @@
 # 🏎️ The Delta Project
 
-![Python](https://img.shields.io/badge/Python-3.13.7-blue?style=flat\&logo=python)
-![Machine Learning](https://img.shields.io/badge/AI-RandomForest-green?style=flat\&logo=scikit-learn)
+![Python](https://img.shields.io/badge/Python-3.13.7-blue?style=flat&logo=python)
+![Machine Learning](https://img.shields.io/badge/Model-RandomForest-green?style=flat&logo=scikit-learn)
 ![Status](https://img.shields.io/badge/Status-V1.6_Telemetry-orange)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
 
-The system leverages historical race data (2001–present) and machine learning to model **performance deltas** between drivers, teams, and circuits, simulating a full race weekend: qualifying → race.
+The project leverages historical data (from 2001) and Machine Learning (**Random Forest**) to simulate a full race weekend: from qualifying to the chequered flag.
 
 ---
 
 ## 🏛️ Origin of the Name
 
-The project was initially conceived as an **oracle** predicting race outcomes. Since F1 already has its share of dominant oracles, the name was inspired by the **Oracle of Delphi**.
+Why **The Delta Project**?
 
-The Greek initial for Delphi is **Delta (Δ)** — a symbol that also represents *difference*, central to both telemetry analysis and performance modeling.
+The concept started with the idea of building an **Oracle** to predict race outcomes. Since “Oracle” is already very busy winning championships in F1, the project took inspiration from the most famous oracle of antiquity: the **Oracle of Delphi**.
+
+The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double meaning:
+
+- A nod to the Oracle of Delphi  
+- The mathematical symbol for **difference**, the core concept behind performance gaps and telemetry in motorsport
 
 ---
 
 ## 🚀 Key Features
 
-### Core Capabilities
+- **Smart Data Pipeline**
+  - Incremental downloading and merging of race results from **2001 to present** (via Jolpica / Ergast).
+  - Non-destructive updates: only the requested seasons are refreshed.
 
-* **Incremental Data Pipeline**
+- **Telemetry Integration (V1.6)**
+  - Advanced race metrics via **FastF1**:
+    - Average race pace
+    - Best lap
+    - Number of pitstops
+    - Average time lost in pitstops
+  - Stored in a dedicated `f1_extra_features.csv` file and merged into the main dataset.
 
-  * Historical data from 2001 onward (Ergast / Jolpica APIs)
-  * Automatic handling of rookies, transfers, and team changes
+- **“Dual Brain” Architecture**
+  1. **Qualifying Model**  
+     Predicts starting grid positions using:
+     - Encoded driver, team, circuit
+     - Rolling “form” on the grid (`form_grid`)
+     - Career average grid positions (`career_grid_avg`)
+     - Driver–circuit specific grid skill (`circuit_grid_skill`)
+  2. **Race Model**  
+     Predicts race finishing positions using:
+     - Grid position (real or predicted)
+     - Race form (`form_race`)
+     - Career race averages (`career_race_avg`)
+     - Pace telemetry (`career_race_pace`, `career_best_lap`, `career_pit_loss`)
+     - Circuit-specific race skill (`circuit_race_skill`)
 
-* **Dual‑Model Architecture**
+- **Advanced Backtesting**
+  - Full-season simulator:
+    - **Oracle Mode**: the AI predicts the grid and the race.
+    - **Analyst Mode**: the AI receives the *real* starting grid and only predicts the race outcome.
+  - Evaluation metrics:
+    - Winner accuracy (P1)
+    - Top 3 / Top 5 / Top 10 (strict order)
+    - Mean Absolute Error (MAE) on predicted positions.
 
-  1. **Qualifying Model** → Predicts starting grid
-  2. **Race Model** → Predicts final positions based on grid + performance context
-
-* **Telemetry Integration (V1.6)**
-
-  * Average race pace
-  * Best lap
-  * Pit‑stop loss estimation
-  * Long‑run consistency indicators
-
-* **Dynamic Simulation Modes**
-
-  * **Oracle Mode** → Grid + Race fully predicted
-  * **Analyst Mode** → Real grid injected, race performance isolated
-
-* **Season‑Scale Backtesting**
-
-  * Walk‑forward simulation
-  * Strict Top‑N accuracy metrics
-  * Mean Absolute Error (MAE)
+- **Dynamic Driver Management**
+  - Automatic detection of race participants based on the historical entry list.
+  - Handles transfers and rookies when simulating future seasons.
 
 ---
 
-## 🧠 Modeling Philosophy
+## 🧠 Model Philosophy
 
-The Delta Project focuses on **structural performance**, not race randomness.
+The Delta Project focuses on **performance modelling**, not randomness.
 
 Assumptions:
 
-* Results emerge primarily from
+- Race outcomes are driven by:
+  - Driver skill
+  - Car performance
+  - Circuit characteristics
+  - Strategy & execution (reflected through pace and pit metrics)
+- Grid position is crucial, but its **impact depends on the circuit**:
+  - Some tracks are “overtaking hell” (high grid → high finish correlation).
+  - Others are more chaotic or strategic.
 
-  * driver skill
-  * car performance
-  * circuit characteristics
-  * execution quality
-* Grid position is influential but **contextual**, not absolute
+Deliberately **not** modelled:
 
-Deliberately excluded:
+- Safety cars
+- Mechanical failures
+- Crashes
+- Weather randomness (for now)
 
-* Safety cars & random incidents
-* Lap‑by‑lap stochastic simulation
-* One‑off chaotic race events
+The AI’s predictions should be interpreted as:
 
-Predictions should be interpreted as:
-
-> *Most likely finishing order under equal and stable conditions.*
+> “Most likely finishing order **if nothing crazy happens** and everyone runs to form.”
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **Language:** Python 3.13
-* **Data:** Pandas, NumPy
-* **ML:** Scikit‑learn (RandomForestRegressor)
-* **Telemetry:** FastF1
+- **Language:** Python 3.13.7
+- **Data:** Pandas, NumPy
+- **Machine Learning:** scikit-learn (`RandomForestRegressor`, `LabelEncoder`)
+- **Data Collection:**
+  - `requests` (REST API Jolpica/Ergast)
+  - `fastf1` (timing & telemetry)
 
 ---
 
@@ -91,48 +110,154 @@ Predictions should be interpreted as:
 
 ```text
 The-Delta-Project/
-[
-├── src/
-│   ├── data_manager.py        # Data ingestion & cleaning
-│   ├── ml_model.py            # Feature engineering + models
-|
-├── main.py                    # Single race prediction
-├── update_data.py             # Dataset refresh utility
-└── README.md
-```
+│
+├── src/                          # Core source code
+│   ├── data_manager.py           # ETL Pipeline (Ergast + FastF1 + calendar)
+│   └── ml_model.py               # Feature engineering & ML models (qualif + race)
+│
+├── main.py                       # Main entry point (single race prediction)
+├── update_data.py                # Maintenance script (update/refresh datasets)
+│
+└── README.md                     # You are here
+````
 
 ---
 
 ## ⚡ Installation & Usage
 
-### 1. Install dependencies
+### 1. Clone & Install Dependencies
 
 ```bash
-pip install pandas numpy scikit-learn requests fastf1
+pip install pandas numpy scikit-learn requests fastf1 tqdm matplotlib seaborn
 ```
 
-### 2. Build / update dataset
+*(Some libraries like `matplotlib` / `seaborn` are mainly used in dev tools & plotting.)*
+
+---
+
+### 2. Initialise / Update the Data
+
+All data updates are handled via `update_data.py` (a small menu-based manager).
 
 ```bash
 python update_manager.py
-# Recommended: full refresh for first run
 ```
 
-### 3. Predict a single race
+Typical first-time setup:
+
+1. **Update Ergast results** (2001 → current year)
+2. **Update calendar** (to get `races_calendar.csv`)
+3. **Extract FastF1 features** (telemetry for the seasons you care about)
+
+Depending on what you’ve implemented in your menu, it’s usually something like “Option 7: Update ALL”.
+
+This generates:
+
+* `data/f1_data_complete.csv`
+* `data/races_calendar.csv`
+* `data/f1_extra_features.csv`
+
+---
+
+### 3. Run a Single-Race Prediction
+
+Example: predict Abu Dhabi 2025.
 
 ```bash
 python main.py
 ```
 
-### 4. Backtest a full season
+The script will:
+
+1. Load `f1_data_complete.csv`
+2. Ask which Grand Prix you want (partial name works, e.g. `"Abu Dhabi"`)
+3. Ask which season (e.g. `2025`)
+4. Ask whether to use the real grid if available (`o/n`)
+5. Train the models on all races **before** that GP
+6. Print the predicted results table:
+
+* Predicted grid (if `use_real_grid=False`)
+* Predicted race order
+* Δ between grid and final position
+
+---
+
+### 4. Run a Season Simulation (Dev / Benchmark)
+
+The backtesting simulator is in `dev_tools/simulateur_saison.py`.
+
+To evaluate a full season (for example 2025):
 
 ```bash
 python dev_tools/simulateur_saison.py
 ```
 
+You’ll be asked:
+
+* Which season to simulate
+* Whether to use real grids or predicted grids
+
+At the end, you get metrics:
+
+* Winner accuracy (%)
+* Top 3 / Top 5 / Top 10 strict-order accuracy
+* Average MAE on positions
+
 ---
 
-## 📊 Performance Benchmark — V1.6 (2025 Season)
+## 🗺️ Roadmap
+
+The project follows an iterative approach.
+**Current status: V1.6 – Telemetry.**
+
+### ✅ Phase 1: Foundations (V1.4)
+
+* [x] Robust and incremental scraping (2001–2025)
+* [x] Functional ML pipeline (Random Forest)
+* [x] Dynamic participant retrieval per race
+* [x] Season simulator with MAE & Top-K metrics
+
+### ✅ Phase 2: Domain Intelligence (V1.5)
+
+* [x] **Feature Engineering:** recent form (3-race rolling averages)
+* [x] **Circuit analysis:** correlation between grid & result per circuit (`circuit_importance`)
+* [x] **Career stats:** overall averages and circuit-specific skills for each driver
+* [x] **Initial hyperparameter tuning:** Random Forest optimisation
+
+### ✅ Phase 3: Strategy & Environment (V1.6 – Telemetry)
+
+* [x] **Telemetry Integration (FastF1)**:
+
+  * Average pace over the race
+  * Best lap
+  * Pitstop count & mean pit loss
+* [x] **Career telemetry stats:** `career_race_pace`, `career_best_lap`, `career_pit_loss`
+* [x] **Real grid injection:** ability to load and use the actual qualifying result (`latest_qualifying.csv`)
+* [x] **Driver identity hardening:** `DriverKey` harmonised between Ergast and FastF1 (e.g. `m_verstappen`, `j_verstappen`)
+* [x] **Season-level pace ranking:** `pace_rank_season` (relative pace ranking within a season)
+* [x] **Global hyperparameter tuner** for the full pipeline (`dev_tools/hyperparameter_pipeline_tuning.py`)
+* [ ] Weather integration
+* [ ] Sprint format modelling
+
+### 🚀 Phase 4: Next-Gen Models (V2.x)
+
+Planned for the next major version (beyond V1.6):
+
+* [ ] Swap Random Forest → **Gradient Boosting** models:
+
+  * LightGBM / XGBoost
+  * Or CatBoost for heterogeneous tabular data
+* [ ] Dedicated learning-to-rank model for qualifying
+* [ ] Probabilistic outputs (distributions over finishing positions instead of single-point estimates)
+* [ ] More explicit separation between:
+
+  * **Pace model**
+  * **Race-position model**
+  * **Risk / volatility model**
+
+---
+
+## 📊 Current Performance (Reference Season – 2025, V1.6)
 
 | Metric      | 🔮 Oracle Mode | 🔬 Analyst Mode |
 | ----------- | -------------- | --------------- |
@@ -142,42 +267,18 @@ python dev_tools/simulateur_saison.py
 | Top 10      | 13,8%          | 23,8%           |
 | MAE         | 4.16           | 3,42            |
 
-**Interpretation**
+### Interpretation
 
-* Race model strongly captures **true car performance** when the grid is known
-* Remaining limitation lies in qualifying prediction quality
-* Telemetry features improve stability, not peak accuracy
-
----
-
-## 🧊 Version Freeze — V1.6 Decision
-
-V1.6 is now **frozen** with the following design choices:
-
-✅ Grid retained as a race feature (contextual importance)
-✅ Telemetry features preserved but conservatively weighted
-✅ DriverKey normalization stabilized
-✅ RandomForest retained for interpretability & robustness
-
-No further feature additions will be made to V1.6.
+* Once the **starting grid is known**, the race model is very strong:
+  it converts the grid + telemetry profile into a realistic finishing order.
+* The main bottleneck of the global system is now the **qualifying model**:
+  improving grid prediction will directly translate into better Oracle Mode performance.
+* Telemetry features have improved the **race understanding** (especially in Analyst Mode),
+  even though some earlier experiments (over-normalising grid or over-weighting contextual deltas)
+  temporarily degraded performance — those changes have been rolled back in the final V1.6.
 
 ---
 
-## 🔮 Roadmap (Next Major Version)
+## 👨‍💻 Author
 
-**V2.0 — Performance Ranking Era**
-
-Planned changes:
-
-* Learning‑to‑Rank model for qualifying
-* Gradient Boosting (LightGBM / CatBoost)
-* Probability distributions instead of point estimates
-* Explicit uncertainty modeling
-
-V2.0 will intentionally **break compatibility** with V1.x.
-
----
-
-## ✍️ Author
-
-Personal research project developed by an engineering student passionate about Formula 1, telemetry, and machine learning.
+The Delta Project is developed by an engineering student passionate about Formula 1 and Computer Science.
