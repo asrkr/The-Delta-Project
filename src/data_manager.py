@@ -43,15 +43,15 @@ def _fetch_race_result(url):
                 
                 # Sécurisation avec .get pour éviter les erreurs sur les vieilles saisons
                 if "Driver" in df.columns:
-                    df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get("givenName", "")} {x.get("familyName", "")}".strip())
+                    df["DriverKey"] = df["Driver"].apply(lambda x: x.get("familyName", "").lower())
+                    df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get('givenName', '')} {x.get('familyName', '')}".strip())
                 if "Constructor" in df.columns:
                     df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
-                
                 df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
                 df["position"] = pd.to_numeric(df["position"], errors="coerce")
                 
                 # Filtrage des colonnes existantes (ajout de points)
-                cols_ok = ["DriverName", "Team", "grid", "position", "status", "points", "circuitId"]
+                cols_ok = ["DriverKey", "DriverName", "Team", "grid", "position", "status", "points", "circuitId"]
                 final_cols = [c for c in cols_ok if c in df.columns]
                 
                 return df[final_cols]
@@ -86,6 +86,7 @@ def fetch_qualifying_results(year, rnd):
         df = pd.DataFrame(quali_results)
         
         # Extraction propre
+        df["DriverKey"] = df["Driver"].apply(lambda x: x.get("familyName", "").lower())
         df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get("givenName", "")} {x.get("familyName", "")}".strip())
         df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
         
@@ -96,7 +97,7 @@ def fetch_qualifying_results(year, rnd):
         df["year"] = year
         df["round"] = rnd
         
-        return df[["DriverName", "Team", "grid", "year", "round"]]
+        return df[["DriverKey", "DriverName", "Team", "grid", "year", "round"]]
         
     except Exception as e:
         print(f"Erreur fetch quali : {e}")
@@ -137,7 +138,7 @@ def load_real_qualifying(year, rnd):
     quali = df_q[mask].copy()
     
     # On garde les colonnes utiles
-    cols = [c for c in ["DriverName", "Team", "grid", "year", "round"] if c in quali.columns]
+    cols = [c for c in ["DriverKey", "DriverName", "Team", "grid", "year", "round"] if c in quali.columns]
     return quali[cols]
 
 
@@ -268,6 +269,7 @@ def extract_fastf1_features(start_year: int, end_year: int):
                     "year": year,
                     "round": rnd,
                     "DriverNumber": d,
+                    "DriverKey": drv_info.get("LastName", "").lower(),
                     "DriverName": drv_info.get("FullName", ""),
                     "Team": drv_info.get("TeamName", "")
                 }
@@ -429,7 +431,7 @@ def get_race_participants(df, year, rnd):
     r = df[(df["year"] == year) & (df["round"] == rnd)].sort_values("grid")
     if not r.empty:
         # On renvoie les participants trouvés dans l'historique
-        cols = ["DriverName", "Team"]
+        cols = ["DriverKey", "Team"]
         if "grid" in r.columns: cols.append("grid")
         return r[cols].drop_duplicates()
         

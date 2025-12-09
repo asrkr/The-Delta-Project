@@ -63,9 +63,11 @@ if __name__ == "__main__":
         y1 = int(input("Start year for Ergast (recommended: 2001): "))
         y2 = int(input("Start year for FastF1 (not prior than 2018): "))
         y3 = int(input("End year (latest season): "))
+        rnd = int(input("Latest round (for qualifyings): "))
         update_database(y1, y3)
         update_calendar(y1, y3)
         extract_fastf1_features(y2, y3)
+        update_latest_qualifying(y3, rnd)
     
 
     elif choice == 8:
