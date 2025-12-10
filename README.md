@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat&logo=python)
 ![Machine Learning](https://img.shields.io/badge/Model-RandomForest-purple?style=flat&logo=scikit-learn)
-![Status](https://img.shields.io/badge/Status-V1.6_Stable-green)
+![Status](https://img.shields.io/badge/Status-V1.7_Sprint_Context-green)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
@@ -18,7 +18,6 @@ Why **The Delta Project**?
 The concept started with the idea of building an **Oracle** to predict race outcomes. Since “Oracle” is already very busy winning championships in F1, the project took inspiration from the most famous oracle of antiquity: the **Oracle of Delphi**.
 
 The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double meaning:
-
 - A nod to the Oracle of Delphi  
 - The mathematical symbol for **difference**, the core concept behind performance gaps and telemetry in motorsport
 
@@ -38,6 +37,14 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
     - Average time lost in pitstops
   - Stored in a dedicated `f1_extra_features.csv` file and merged into the main dataset.
 
+- **Sprint Weekend Context (V1.7)**
+  - Sprint results extracted via **Ergast API** and stored in a dedicated dataset.
+  - Sprint data is treated as **context**, not as a prediction target.
+  - Sprint signals enrich race understanding without altering the core model logic:
+    - Explicit sprint-weekend flag
+    - Relative performance delta between Sprint grid and finish
+  - No impact on non-sprint weekends (hard separation).
+
 - **“Dual Brain” Architecture**
   1. **Qualifying Model**  
      Predicts starting grid positions using:
@@ -45,6 +52,7 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
      - Rolling “form” on the grid (`form_grid`)
      - Career average grid positions (`career_grid_avg`)
      - Driver–circuit specific grid skill (`circuit_grid_skill`)
+
   2. **Race Model**  
      Predicts race finishing positions using:
      - Grid position (real or predicted)
@@ -52,6 +60,7 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
      - Career race averages (`career_race_avg`)
      - Pace telemetry (`career_race_pace`, `career_best_lap`, `career_pit_loss`)
      - Circuit-specific race skill (`circuit_race_skill`)
+     - Sprint contextual signals (when applicable)
 
 - **Advanced Backtesting**
   - Full-season simulator:
@@ -61,6 +70,7 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
     - Winner accuracy (P1)
     - Top 3 / Top 5 / Top 10 (strict order)
     - Mean Absolute Error (MAE) on predicted positions.
+  - Sprint-aware benchmarks (Sprint vs Non-Sprint weekends).
 
 - **Dynamic Driver Management**
   - Automatic detection of race participants based on the historical entry list.
@@ -73,18 +83,19 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
 The Delta Project focuses on **performance modelling**, not randomness.
 
 Assumptions:
-
 - Race outcomes are driven by:
   - Driver skill
   - Car performance
   - Circuit characteristics
   - Strategy & execution (reflected through pace and pit metrics)
 - Grid position is crucial, but its **impact depends on the circuit**:
-  - Some tracks are “overtaking hell” (high grid → high finish correlation).
-  - Others are more chaotic or strategic.
+  - Some tracks are “overtaking hell”.
+  - Others allow significant position swings.
+
+Sprint races are considered as:
+> “High-signal short-format race context, useful to refine Sunday expectations.”
 
 Deliberately **not** modelled:
-
 - Safety cars
 - Mechanical failures
 - Crashes
@@ -113,7 +124,7 @@ The AI’s predictions should be interpreted as:
 The-Delta-Project/
 │
 ├── src/                          # Core source code
-│   ├── data_manager.py           # ETL Pipeline (Ergast + FastF1 + calendar)
+│   ├── data_manager.py           # ETL Pipeline (Ergast + FastF1 + calendar + sprints)
 │   └── ml_model.py               # Feature engineering & ML models (qualif + race)
 │
 ├── main.py                       # Main entry point (single race prediction)
@@ -131,11 +142,12 @@ The-Delta-Project/
 ```bash
 pip install pandas numpy scikit-learn requests fastf1
 ```
+
 ---
 
 ### 2. Initialise / Update the Data
 
-All data updates are handled via `update_data.py` (a small menu-based manager).
+All data updates are handled via `update_manager.py`.
 
 ```bash
 python update_manager.py
@@ -143,137 +155,70 @@ python update_manager.py
 
 Typical first-time setup:
 
-1. **Update Ergast results** (2001 → current year)
-2. **Update calendar** (to get `races_calendar.csv`)
-3. **Extract FastF1 features** (telemetry for the seasons you care about)
-
-Depending on what you’ve implemented in your menu, it’s usually something like “Option 7: Update ALL”.
+1. Update Ergast results
+2. Update calendar
+3. Extract FastF1 telemetry
+4. Extract Sprint results (V1.7)
 
 This generates:
 
 * `data/f1_data_complete.csv`
 * `data/races_calendar.csv`
 * `data/f1_extra_features.csv`
+* `data/f1_sprint_results.csv`
 
 ---
 
 ### 3. Run a Single-Race Prediction
 
-Example: predict Abu Dhabi 2025.
-
 ```bash
 python main.py
 ```
-
-The script will:
-
-1. Load `f1_data_complete.csv`
-2. Ask which Grand Prix you want (partial name works, e.g. `"Abu Dhabi"`)
-3. Ask which season (e.g. `2025`)
-4. Ask whether to use the real grid if available (`o/n`)
-5. Train the models on all races **before** that GP
-6. Print the predicted results table:
-
-* Predicted grid (if `use_real_grid=False`)
-* Predicted race order
-* Δ between grid and final position
 
 ---
 
 ### 4. Run a Season Simulation (Dev / Benchmark)
 
-The backtesting simulator is in `dev_tools/simulateur_saison.py`.
-
-To evaluate a full season (for example 2025):
-
 ```bash
 python dev_tools/simulateur_saison.py
 ```
 
-You’ll be asked:
-
-* Which season to simulate
-* Whether to use real grids or predicted grids
-
-At the end, you get metrics:
-
-* Winner accuracy (%)
-* Top 3 / Top 5 / Top 10 strict-order accuracy
-* Average MAE on positions
+Sprint-aware benchmarks can be run using dedicated benchmark scripts.
 
 ---
 
 ## 🗺️ Roadmap
 
-The project follows an iterative approach.
-**Current status: V1.6 – Telemetry.**
+**Current status: V1.7 – Sprint Context.**
 
-### ✅ Phase 1: Foundations (V1.4)
+### ✅ Phase 3: Strategy & Environment (V1.6–V1.7)
 
-* [x] Robust and incremental scraping (2001–2025)
-* [x] Functional ML pipeline (Random Forest)
-* [x] Dynamic participant retrieval per race
-* [x] Season simulator with MAE & Top-K metrics
-
-### ✅ Phase 2: Domain Intelligence (V1.5)
-
-* [x] **Feature Engineering:** recent form (3-race rolling averages)
-* [x] **Circuit analysis:** correlation between grid & result per circuit (`circuit_importance`)
-* [x] **Career stats:** overall averages and circuit-specific skills for each driver
-* [x] **Initial hyperparameter tuning:** Random Forest optimisation
-
-### ✅ Phase 3: Strategy & Environment (V1.6 – Telemetry)
-
-* [x] **Telemetry Integration (FastF1)**:
-
-  * Average pace over the race
-  * Best lap
-  * Pitstop count & mean pit loss
-* [x] **Career telemetry stats:** `career_race_pace`, `career_best_lap`, `career_pit_loss`
-* [x] **Real grid injection:** ability to load and use the actual qualifying result (`latest_qualifying.csv`)
-* [x] **Driver identity hardening:** `DriverKey` harmonised between Ergast and FastF1 (e.g. `m_verstappen`, `j_verstappen`)
-* [x] **Season-level pace ranking:** `pace_rank_season` (relative pace ranking within a season)
-* [x] **Global hyperparameter tuner** for the full pipeline (`dev_tools/hyperparameter_pipeline_tuning.py`)
-* [ ] Weather integration
-* [ ] Sprint format modelling
+* [x] Telemetry Integration (FastF1)
+* [x] Career telemetry aggregation
+* [x] Real grid injection
+* [x] Robust driver identity handling (`DriverKey`)
+* [x] Season-level pace normalization
+* [x] Sprint weekend contextual integration
+* [x] Sprint-aware benchmarking and validation
 
 ### 🚀 Phase 4: Next-Gen Models (V2.x)
 
-Planned for the next major version (beyond V1.6):
-
-* [ ] Swap Random Forest → **Gradient Boosting** models:
-
-  * LightGBM / XGBoost
-  * Or CatBoost for heterogeneous tabular data
-* [ ] Dedicated learning-to-rank model for qualifying
-* [ ] Probabilistic outputs (distributions over finishing positions instead of single-point estimates)
-* [ ] More explicit separation between:
-
-  * **Pace model**
-  * **Race-position model**
-  * **Risk / volatility model**
+* Learning-to-Rank for qualifying
+* Gradient Boosting (LightGBM / CatBoost)
+* Probabilistic race outcome distributions
+* Explicit separation between pace, position, and variance modelling
 
 ---
 
-## 📊 Current Performance (Reference Season – 2025, V1.6)
+## 📊 Current Performance (Reference Season – 2025, V1.7)
 
 | Metric      | 🔮 Oracle Mode | 🔬 Analyst Mode |
 | ----------- | -------------- | --------------- |
-| Winner (P1) | 29,2%          | 65,2%           |
-| Top 3       | 20,8%          | 43,1%           |
-| Top 5       | 15,8%          | 35%             |
-| Top 10      | 13,8%          | 23,8%           |
+| Winner (P1) | 33,3%          | 62,5%           |
+| Top 3       | 22,2%          | 44,4%           |
+| Top 5       | 16,7%          | 35,8%           |
+| Top 10      | 14,2%          | 24,6%           |
 | MAE         | 4.16           | 3,42            |
-
-### Interpretation
-
-* Once the **starting grid is known**, the race model is very strong:
-  it converts the grid + telemetry profile into a realistic finishing order.
-* The main bottleneck of the global system is now the **qualifying model**:
-  improving grid prediction will directly translate into better Oracle Mode performance.
-* Telemetry features have improved the **race understanding** (especially in Analyst Mode),
-  even though some earlier experiments (over-normalising grid or over-weighting contextual deltas)
-  temporarily degraded performance — those changes have been rolled back in the final V1.6.
 
 ---
 
@@ -285,7 +230,7 @@ The Delta Project is developed by an engineering student passionate about Formul
 
 ## 📄 License
 
-This project is released under the **MIT License**.  
+This project is released under the **MIT License**.
 You are free to use, modify, and distribute the code, provided that the original copyright notice is retained.
 
 See the [LICENSE](LICENSE) file for more details.
