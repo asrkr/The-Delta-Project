@@ -282,3 +282,12 @@ Planned for the next major version (beyond V1.6):
 ## 👨‍💻 Author
 
 The Delta Project is developed by an engineering student passionate about Formula 1 and Computer Science.
+
+---
+
+## 📄 License
+
+This project is released under the **MIT License**.  
+You are free to use, modify, and distribute the code, provided that the original copyright notice is retained.
+
+See the [LICENSE](LICENSE) file for more details.
