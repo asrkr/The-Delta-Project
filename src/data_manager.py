@@ -19,6 +19,7 @@ RESULTS_CSV_PATH = os.path.join(DATA_DIR, "f1_data_complete.csv")
 CALENDAR_CSV_PATH = os.path.join(DATA_DIR, "races_calendar.csv")
 EXTRA_CSV_PATH = os.path.join(DATA_DIR, "f1_extra_features.csv")
 QUALI_CSV_PATH = os.path.join(DATA_DIR, "latest_qualifying.csv")
+SPRINT_CSV_PATH = os.path.join(DATA_DIR, "f1_sprint_results.csv")
 
 
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -26,9 +27,11 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 fastf1.Cache.enable_cache(CACHE_DIR)
 
+
 # -------------------------------------------------------------------
 # DRIVER KEY CREATION
 # -------------------------------------------------------------------
+
 
 def make_driver_key(given_name: str, family_name: str) -> str:
     if not given_name or not family_name:
@@ -46,9 +49,11 @@ def make_driver_key(given_name: str, family_name: str) -> str:
     driver_key = f"{g[0]}_{f}"
     return driver_key
 
+
 # -------------------------------------------------------------------
 # ERGAST — FETCH
 # -------------------------------------------------------------------
+
 
 def _fetch_race_result(url):
     for attempt in range(4):
@@ -122,31 +127,8 @@ def fetch_qualifying_results(year, rnd):
         return df[["DriverKey", "DriverName", "Team", "grid", "year", "round"]]
         
     except Exception as e:
-        print(f"Erreur fetch quali : {e}")
+        print(f"Error qualifying fetch: {e}.")
         return None
-
-
-def update_latest_qualifying(year, rnd):
-    df = fetch_qualifying_results(year, rnd)
-    if df is None:
-        return False
-    # Overwrite the file to keep only the latest request
-    df.to_csv(QUALI_CSV_PATH, index=False)
-    return True
-
-
-def has_real_qualifying(year: int, rnd: int) -> bool:
-    if not os.path.exists(QUALI_CSV_PATH):
-        return False
-    try:
-        df_q = pd.read_csv(QUALI_CSV_PATH)
-        # Check if the file contains the required columns
-        if "year" not in df_q.columns or "round" not in df_q.columns:
-            return False
-        mask = (df_q["year"] == year) & (df_q["round"] == rnd)
-        return not df_q[mask].empty
-    except:
-        return False
 
 
 def load_real_qualifying(year, rnd):
@@ -163,9 +145,64 @@ def load_real_qualifying(year, rnd):
     return quali[cols]
 
 
+def fetch_sprint_results(year, rnd):
+    """
+    Retrieves Sprint results from Ergast API.
+    Returns a DataFrame or None if no sprint occurred during the weekend
+    """
+    # sprints were introduced in 2021
+    if year < 2021:
+        return None
+    
+    url = f"https://api.jolpi.ca/ergast/f1/{year}/{rnd}/sprint.json"
+
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code != 200:
+            return None
+        
+        data = r.json()
+        races = data["MRData"]["RaceTable"]["Races"]
+
+        # if the list is empty, it means no sprint for this round
+        if not races:
+            return None
+        
+        circuit_id = races[0]["Circuit"]["circuitId"]
+        sprint_results = races[0].get("SprintResults", [])
+        if not sprint_results:
+            return None
+        
+        df = pd.DataFrame(sprint_results)
+
+        # Cleaning and key generation
+        df["DriverKey"] = df["Driver"].apply(lambda x: make_driver_key(x.get("givenName", ""), x.get("familyName", "")))
+        df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get("givenName", "")} {x.get("familyName", "")}".strip())
+        df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
+
+        # numeric conversions
+        df["sprint_pos"] = pd.to_numeric(df["position"], errors="coerce")
+        df["sprint_grid"] = pd.to_numeric(df["grid"], errors="coerce")
+        df["sprint_points"] = pd.to_numeric(df["points"], errors="coerce")
+
+        df["year"] = year
+        df["round"] = rnd
+        df["circuitId"] = circuit_id
+
+        # filtering relevant columns
+        cols = ["DriverKey", "DriverName", "Team", "sprint_grid", "sprint_pos", "status", "sprint_points", "year", "round"]
+        final_cols = [c for c in cols if c in df.columns]
+        return df[final_cols]
+    
+    except Exception as e:
+        print(f"Error sprint fetch: {e}.")
+        return None
+
+
 # -------------------------------------------------------------------
-# ERGAST — UPDATE WITH MERGE (incremental)
+# ERGAST — UPDATES (WITH INCREMENTAL LOGIC)
 # -------------------------------------------------------------------
+
 
 def update_database(start_year=2001, end_year=2025):
     print(f"📌 Updating Ergast results {start_year}-{end_year}.")
@@ -213,9 +250,61 @@ def update_database(start_year=2001, end_year=2025):
     print(f"✔️ Saved → {RESULTS_CSV_PATH}.")
 
 
+def update_latest_qualifying(year, rnd):
+    df = fetch_qualifying_results(year, rnd)
+    if df is None:
+        return False
+    # Overwrite the file to keep only the latest request
+    df.to_csv(QUALI_CSV_PATH, index=False)
+    return True
+
+
+def update_sprint_data(start_year=2021, end_year=2025):
+    """
+    Updates the f1_sprint_results.csv file.
+    Only checks years >= 2021
+    """
+    print(f"📌 Updating Sprint Results {start_year}-{end_year}")
+
+    if start_year < 2021:
+        start_year = 2021
+    
+    all_sprints = []
+
+    for year in range(start_year, end_year+1):
+        print(f" Season {year}...", end=" ")
+        count = 0
+        # we assume max 25 rounds
+        for rnd in range(1, 26):
+            df_sprint = fetch_sprint_results(year, rnd)
+            if df_sprint is not None and not df_sprint.empty:
+                all_sprints.append(df_sprint)
+                count += 1
+            time.sleep(0.5)  # Respect API limits
+        print(f"({count} sprints found)")
+    
+    if not all_sprints:
+        print("No sprint data found.")
+    
+    df_new = pd.concat(all_sprints, ignore_index=True)
+
+    # update and save
+    if os.path.exists(SPRINT_CSV_PATH):
+        df_old = pd.read_csv(SPRINT_CSV_PATH)
+        df_old = df_old[(df_old["year"] < start_year) | (df_old["year"] > end_year)]
+        df_final = pd.concat([df_old, df_new], ignore_index=True)
+    else:
+        df_final = df_new
+    
+    df_final = df_final.sort_values(["year", "round", "sprint_pos"])
+    df_final.to_csv(SPRINT_CSV_PATH, index=False)
+    print(f"✔️ Sprint Data saved → {SPRINT_CSV_PATH}")
+
+
 # -------------------------------------------------------------------
 # CALENDAR
 # -------------------------------------------------------------------
+
 
 def update_calendar(start_year=2001, end_year=2025):
     print(f"📌 Updating calendar {start_year}-{end_year}.")
@@ -418,6 +507,30 @@ def load_data():
             how="left"
         )
 
+    # --- MERGE SPRINT DATA ---
+    sprint_cols = ["sprint_pos", "sprint_grid", "sprint_points"]
+
+    if os.path.exists(SPRINT_CSV_PATH):
+        try:
+            df_sprint = pd.read_csv(SPRINT_CSV_PATH)
+            # select keys + metrics
+            cols_to_merge = ["year", "round", "DriverKey"] + \
+                [c for c in sprint_cols if c in df_sprint.columns]
+            # Left merge : keep all main race rows, add sprint info where available
+            df = df.merge(
+                df_sprint[cols_to_merge],
+                on=["year", "round", "DriverKey"],
+                how="left"
+            )
+        except Exception as e:
+            print(f"⚠️ Error loading sprint data: {e}")
+            # fallback
+            for c in sprint_cols:
+                df[c] = np.nan
+    else:
+        for c in sprint_cols:
+            df[c] = np.nan
+
     return df
 
 
@@ -449,3 +562,17 @@ def get_race_participants(df, year, rnd):
         return r[cols].drop_duplicates()
         
     return pd.DataFrame()
+
+
+def has_real_qualifying(year: int, rnd: int) -> bool:
+    if not os.path.exists(QUALI_CSV_PATH):
+        return False
+    try:
+        df_q = pd.read_csv(QUALI_CSV_PATH)
+        # Check if the file contains the required columns
+        if "year" not in df_q.columns or "round" not in df_q.columns:
+            return False
+        mask = (df_q["year"] == year) & (df_q["round"] == rnd)
+        return not df_q[mask].empty
+    except:
+        return False

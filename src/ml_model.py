@@ -119,7 +119,36 @@ def add_fastf1_features(df):
     return df
 
 # ---------------------------------------------------------
-# 4) Career History (Advanced Stats)
+# 4) SPRINT FEATURES
+# ---------------------------------------------------------
+
+def add_sprint_features(df):
+    """
+    Adds contextual features from sprint results
+    Strategy: additive (sprint = context, not target)
+    """
+    # safety : if sprint data was not merged
+    required_cols = {"sprint_pos", "sprint_grid"}
+    if not required_cols.issubset(df.columns):
+        df["has_sprint"] = 0
+        df["sprint_pos"] = df["grid"]
+        df["sprint_grid"] = df["grid"]
+        df["sprint_delta"] = 0.0
+        return df
+    
+    # flag sprint weekends
+    df["has_sprint"] = df["sprint_pos"].notna().astype(int)
+    # sprint delta (gained/lost positions)
+    df["sprint_delta"] = df["sprint_grid"] - df["sprint_pos"]
+    # neutral fill for non sprint weekends
+    df["sprint_delta"] = df["sprint_delta"].fillna(0.0)
+    # if no sprint, assume sprint_pos == grid (neutral & realistic)
+    df["sprint_pos"] = df["sprint_pos"].fillna(df["grid"])
+
+    return df
+
+# ---------------------------------------------------------
+# 5) Career History (Advanced Stats)
 # ---------------------------------------------------------
 
 def add_driver_history(df):
@@ -166,7 +195,7 @@ def add_driver_history(df):
     return df
 
 # ---------------------------------------------------------
-# 5) Encoding data
+# 6) Encoding data
 # ---------------------------------------------------------
 
 def encode_data(df):
@@ -196,7 +225,7 @@ def encode_data(df):
 
 
 # ---------------------------------------------------------
-# 6) Model training
+# 7) Model training
 # ---------------------------------------------------------
 def train_models(df_train):
     # RandomForest hyperparameters
@@ -242,20 +271,20 @@ def train_models(df_train):
         "team_id", "driver_id", "year", 
         "circuit_importance", "circuit_id",
         "circuit_race_skill",
-        "career_race_pace", "career_best_lap", "career_pit_loss"
+        "career_race_pace", "career_best_lap", "career_pit_loss",
+        "has_sprint", "sprint_delta"
     ]
     features_race = [f for f in features_race if f in df_train.columns]
 
     model_race = RandomForestRegressor(**params_race)
     model_race.fit(df_train[features_race], df_train["position"])
 
-    """
-    Feature Importances - OPTIONAL, ONLY FOR IMPROVEMENTS/DEBUTS
-    """
     
+    # Feature Importances - OPTIONAL, ONLY FOR IMPROVEMENTS/DEBUTS
+    """
     qualif_importances = get_feature_importances(model_qualif, features_qualif)
     race_importances = get_feature_importances(model_race, features_race)
-    """
+    
     print("\n📊 Qualifying Model — Feature Importances")
     print(qualif_importances.to_string(index=False))
 
@@ -266,7 +295,7 @@ def train_models(df_train):
     return model_qualif, model_race
 
 # ---------------------------------------------------------
-# 7) Predictions
+# 8) Predictions
 # ---------------------------------------------------------
 
 def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_team, le_circuit, full_df, use_real_grid=False):
@@ -369,6 +398,10 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             grid_input = pred_grid
             if use_real_grid and "grid" in row and not pd.isna(row["grid"]):
                 grid_input = row["grid"]
+            
+            # Retrieve sprint data if present
+            has_sprint_val = row["has_sprint"] if "has_sprint" in row else 0
+            s_delta = row["sprint_delta"] if "sprint_delta" in row and pd.notna(row["sprint_delta"]) else 0.0
 
             # ===== RACE =====
             X_r = pd.DataFrame([[
@@ -381,7 +414,9 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
                 stats["circuit_race_skill"],
                 stats["career_race_pace"],
                 stats["career_best_lap"],
-                stats["career_pit_loss"]
+                stats["career_pit_loss"],
+                has_sprint_val,
+                s_delta
             ]], columns=[
                 "grid",
                 "form_race",
@@ -392,7 +427,8 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
                 "circuit_race_skill",
                 "career_race_pace",
                 "career_best_lap",
-                "career_pit_loss"
+                "career_pit_loss",
+                "has_sprint", "sprint_delta"
             ])
 
             pred_race = model_race.predict(X_r)[0]
@@ -413,7 +449,7 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
     return pd.DataFrame(simulation_results)
 
 # ---------------------------------------------------------
-# 8) MAIN FUNCTION
+# 9) MAIN FUNCTION
 # ---------------------------------------------------------
 
 def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=False):
@@ -423,6 +459,7 @@ def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=Fals
     df = add_dual_form(df)
     df = add_circuit_impact(df)
     df = add_fastf1_features(df)
+    df = add_sprint_features(df)
     df = add_driver_history(df)
 
     # 2) Encoding
@@ -477,6 +514,11 @@ def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=Fals
     print(results[["Pos", "DriverName", "Team", "Grid", "Delta"]].head(20).to_string(index=False))
 
 
+# ---------------------------------------------------------
+# TOOLS FOR BENCHMARKS
+# ---------------------------------------------------------
+
+
 def get_feature_importances(model, feature_names):
     """
     Return a sorted DataFrame of a sklearn model's feature importances
@@ -489,3 +531,9 @@ def get_feature_importances(model, feature_names):
         .sort_values("importance", ascending=False)
         .reset_index(drop=True)
     )
+
+
+def add_sprint_features_test(df):
+    df["has_sprint"] = 0
+    df["sprint_delta"] = 0.0
+    return df
