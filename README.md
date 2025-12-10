@@ -129,11 +129,8 @@ The-Delta-Project/
 ### 1. Clone & Install Dependencies
 
 ```bash
-pip install pandas numpy scikit-learn requests fastf1 tqdm matplotlib seaborn
+pip install pandas numpy scikit-learn requests fastf1
 ```
-
-*(Some libraries like `matplotlib` / `seaborn` are mainly used in dev tools & plotting.)*
-
 ---
 
 ### 2. Initialise / Update the Data
