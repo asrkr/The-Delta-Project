@@ -1,8 +1,9 @@
 # 🏎️ The Delta Project
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat&logo=python)
-![Machine Learning](https://img.shields.io/badge/Model-RandomForest-yellow?style=flat&logo=scikit-learn)
+![Machine Learning](https://img.shields.io/badge/Model-RandomForest-purple?style=flat&logo=scikit-learn)
 ![Status](https://img.shields.io/badge/Status-V1.6_Stable-green)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
 
