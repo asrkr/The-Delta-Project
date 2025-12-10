@@ -1,88 +1,88 @@
-# Changelog — The Delta Project
+# 📜 Changelog
 
-All notable changes to this project are documented in this file.  
-The project follows an **iterative, benchmark-driven development approach**.
+All notable changes to **The Delta Project** are documented in this file.
+
+The project follows a versioned, iterative development approach focused on
+model stability, domain intelligence, and progressive realism.
 
 ---
 
-## [v1.6] — Telemetry & Robustness (Frozen)
+## [v1.6.0] – Telemetry Integration  
+**Release date:** 2025
 
-### Added
-- Integration of **FastF1 telemetry data**:
+### ✨ Added
+- **FastF1 telemetry integration**:
   - Average race pace
   - Best lap time
-  - Pit stop count
-  - Mean pit time loss
-- Advanced feature engineering pipeline
-- Full **driver identity unification** between Ergast & FastF1:
-  - Normalized `DriverKey`
-  - Robust handling of historical name collisions (e.g. Verstappen, Schumacher)
-- Optional **real qualifying grid injection** for race prediction
-- Full **season walk-forward simulation pipeline**
-- Automatic feature importance analysis
-- End-to-end hyperparameter tuning via pipeline tuner
-
-### Machine Learning
-- Core model: `RandomForestRegressor`
-- Decoupled models:
-  - Qualifying prediction
-  - Race outcome prediction
-- Experimental features tested:
-  - `grid_delta`
-  - grid normalization
-  - `pace_rank_season`
-  - `expected_race_rank` / contextual grid deltas
-- Systematic evaluation of each feature via season benchmarks
-
-### Results (reference season)
-- **IA-only (no real grid)**
-  - Winner accuracy ≈ 29–33%
-  - MAE ≈ 4.1
-- **With real grid**
-  - Winner accuracy ≈ 58–63%
-  - Top 3 ≈ 43–46%
-  - MAE ≈ 3.4
-
-**Conclusion:**  
-Race grid position remains the dominant variable in Formula 1.  
-The v1.6 model is now **robust, explainable and stable**, but bounded by the limitations of RandomForest on ranking-heavy problems.
-
-### Known limitations
-- Strong dependency on grid whenever available
-- IA-only performance slightly below v1.5
-- RandomForest limitations:
-  - poor learning-to-rank behavior
-  - no probabilistic output
-  - limited interaction modeling
-
-👉 Version **v1.6 is frozen** and serves as the stable baseline for the next major iteration.
+  - Pit stop loss estimation
+- **Race execution awareness** through telemetry-derived features.
+- **Real grid injection**:
+  - Ability to run race predictions using real qualifying results.
+  - Enables clear separation between qualifying accuracy and race modeling quality.
+- **Season-level pace normalization** (`pace_rank_season`).
+- **Improved driver identity handling**:
+  - Stable `DriverKey` generation to avoid name collisions (e.g. Verstappen, Schumacher).
 
 ---
 
-## [v1.5] — Domain Intelligence
+### 🔄 Changed
+- **Race Model feature set rebalanced**:
+  - Grid-related contextual features were evaluated and simplified for stability.
+  - Telemetry features prioritized over over-engineered grid transformations.
+- **Qualifying ↔ Race decoupling reinforced**:
+  - Qualifying predicts grid only.
+  - Race model focuses on execution and pace conditional on starting position.
+- **Hyperparameter tuning pipeline updated** to reflect the new feature space.
+- **Model benchmarks redefined** using two explicit scenarios:
+  - *Oracle Mode* (predicted grid)
+  - *Analyst Mode* (real grid)
 
-### Added
-- Driver recent form (rolling average)
-- Career-long driver statistics
-- Circuit-specific driver skills
-- Circuit grid impact estimation
-- First automated hyperparameter tuning
+---
 
-### Notes
-- Strong performance with real grids
-- Reduced robustness in unseen conditions
+### 🗑️ Removed
+- Experimental grid normalization variants that degraded generalization:
+  - `grid_z`
+  - `grid_percent`
+- Overly synthetic grid deltas that did not improve Oracle Mode performance.
 
 ---
 
-## [v1.4] — Foundations
-
-### Added
-- Full Ergast scraping (2001–2025)
-- End-to-end ML pipeline
-- Race-by-race simulation
-- Advanced evaluation metrics:
-  - MAE
-  - Top 3 / Top 5 / Top 10
-- Modular project architecture
+### 🐞 Fixed
+- Driver name / team mismatches causing label encoder crashes.
+- Rookie / mid-season team edge cases.
+- Silent data leakage between training and prediction phases.
 
 ---
+
+### ⚠️ Known Limitations
+- Oracle Mode (full AI prediction) remains limited by qualifying model accuracy.
+- Stochastic race events are intentionally not modeled:
+  - DNFs
+  - Safety Cars
+  - Weather randomness
+- Sprint formats not yet supported.
+
+---
+
+## Previous Versions
+
+### [v1.5] – Domain Intelligence
+- Recent form (rolling averages)
+- Circuit-specific skill metrics
+- Career-wide driver profiling
+- Automated hyperparameter tuning
+
+### [v1.4] – Foundations
+- Historical database (2001–present)
+- Random Forest ML pipeline
+- Full-season backtesting
+- Core accuracy metrics (Top-K, MAE)
+
+---
+
+## 🔮 Next Version
+
+**v2.0 – Probabilistic & Ranking Models**
+- Qualifying as Learning-to-Rank
+- Gradient Boosting (LightGBM / CatBoost)
+- Probabilistic race outcome distributions
