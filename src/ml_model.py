@@ -9,10 +9,10 @@ from src.data_manager import get_race_participants, has_real_qualifying, load_re
 
 warnings.filterwarnings("ignore", message="Mean of empty slice")
 
+# ---------------------------------------------------------
+# 1) Driver recent form (last 3 GPs)
+# ---------------------------------------------------------
 
-# ---------------------------------------------------------
-# 1) Forme récente pilote (3 derniers GP)
-# ---------------------------------------------------------
 def add_dual_form(df):
     df = df.sort_values(by=["year", "round"])
     df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
@@ -29,10 +29,10 @@ def add_dual_form(df):
     df["form_race"] = df["form_race"].fillna(13.0)
     return df
 
+# ---------------------------------------------------------
+# 2) Circuit importance
+# ---------------------------------------------------------
 
-# ---------------------------------------------------------
-# 2) Importance du circuit
-# ---------------------------------------------------------
 def add_circuit_impact(df):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     calendar_path = os.path.join(os.path.dirname(current_dir), "data", "races_calendar.csv")
@@ -73,20 +73,20 @@ def add_circuit_impact(df):
 
     return df
 
+# ---------------------------------------------------------
+# 3) FastF1 features (robust handling)
+# ---------------------------------------------------------
 
-# ---------------------------------------------------------
-# 3) Features FastF1 (Gestion Robustesse)
-# ---------------------------------------------------------
 def add_fastf1_features(df):
     extra = load_extra_features()
     fastf1_cols = ["avg_race_pace", "best_lap", "pitstops_count", "mean_pit_loss"]
 
-    # Si pas de fichier extra, on crée les colonnes vides (0.0)
+    # If no extra file, create empty columns (0.0)
     if extra is None or extra.empty:
         for c in fastf1_cols: df[c] = 0.0
         return df
 
-    # Nettoyage mean_pit_loss si nécessaire
+    # Clean mean_pit_loss if necessary
     if "pit_losses" in extra.columns and "mean_pit_loss" not in extra.columns:
         def clean_pit(val):
             try:
@@ -99,15 +99,15 @@ def add_fastf1_features(df):
         extra["mean_pit_loss"] = extra["pit_losses"].apply(clean_pit)
 
     # Merge
-    # On ne garde que les colonnes qui existent vraiment dans extra
+    # Keep only columns that actually exist in extra
     cols_to_merge = ["year", "round", "DriverKey"] + [c for c in fastf1_cols if c in extra.columns]
-    # Sécurité : si DriverKey absent côté df
+    # Safety: ensure DriverKey exists in df
     if "DriverKey" not in df.columns:
         df["DriverKey"] = df["DriverName"].str.lower()
 
     df = df.merge(extra[cols_to_merge], on=["year","round","DriverKey"], how="left", suffixes=("", "_extra"))
 
-    # Remplissage des NaN (Médiane ou 0)
+    # Fill NaNs (Median or 0)
     for c in fastf1_cols:
         if c in df.columns:
             med = df[c].median()
@@ -118,29 +118,29 @@ def add_fastf1_features(df):
             
     return df
 
+# ---------------------------------------------------------
+# 4) Career History (Advanced Stats)
+# ---------------------------------------------------------
 
-# ---------------------------------------------------------
-# 4) Historique Carrière (Stats Avancées)
-# ---------------------------------------------------------
 def add_driver_history(df):
     df = df.sort_values(["year", "round"])
     
-    # Sécurité : on s'assure que les colonnes FastF1 existent avant de faire le transform
+    # Safety: ensure FastF1 columns exist before transform
     for c in ["avg_race_pace", "best_lap", "mean_pit_loss"]:
         if c not in df.columns: df[c] = 0.0
 
     grp = df.groupby("DriverKey")
     
-    # Stats classiques
+    # Classic stats
     df["career_grid_avg"] = grp["grid"].transform(lambda x: x.shift(1).expanding().mean())
     df["career_race_avg"] = grp["position"].transform(lambda x: x.shift(1).expanding().mean())
     
-    # Stats FastF1
+    # FastF1 stats
     df["career_race_pace"] = grp["avg_race_pace"].transform(lambda x: x.shift(1).expanding().mean())
     df["career_best_lap"] = grp["best_lap"].transform(lambda x: x.shift(1).expanding().mean())
     df["career_pit_loss"] = grp["mean_pit_loss"].transform(lambda x: x.shift(1).expanding().mean())
 
-    # Stats Circuit
+    # Circuit stats
     if "circuitId" in df.columns:
         grpc = df.groupby(["DriverKey", "circuitId"])
         df["circuit_grid_skill"] = grpc["grid"].transform(lambda x: x.shift(1).expanding().mean())
@@ -149,7 +149,7 @@ def add_driver_history(df):
         df["circuit_grid_skill"] = np.nan
         df["circuit_race_skill"] = np.nan
 
-    # Remplissage
+    # Fill missing values
     cols_fill = ["career_grid_avg", "career_race_avg", "circuit_grid_skill", "circuit_race_skill"]
     df[cols_fill] = df[cols_fill].fillna(14.0)
     
@@ -165,10 +165,10 @@ def add_driver_history(df):
 
     return df
 
+# ---------------------------------------------------------
+# 5) Encoding data
+# ---------------------------------------------------------
 
-# ---------------------------------------------------------
-# 5) Encodage
-# ---------------------------------------------------------
 def encode_data(df):
     df_clean = df[df["status"].str.contains("Finished|Lap|Lapped", regex=True, na=False)].copy()
 
@@ -196,10 +196,10 @@ def encode_data(df):
 
 
 # ---------------------------------------------------------
-# 6) Entraînement
+# 6) Model training
 # ---------------------------------------------------------
 def train_models(df_train):
-    # Paramètres (Tu peux remettre les tiens ici)
+    # RandomForest hyperparameters
     params_qualif = {
         "n_estimators": 200,
         "max_depth": None,
@@ -221,19 +221,19 @@ def train_models(df_train):
         "n_jobs": -1
     }
 
-    # Liste Qualif
+    # Qualifying features
     features_qualif = [
         "team_id", "driver_id", "year", 
         "form_grid", "circuit_importance", "circuit_id", 
         "career_grid_avg", "circuit_grid_skill"
     ]
-    # Filtre pour ne garder que ce qui existe
+    # Filtering to keep only existing features
     features_qualif = [f for f in features_qualif if f in df_train.columns]
     
     model_qualif = RandomForestRegressor(**params_qualif)
     model_qualif.fit(df_train[features_qualif], df_train["grid"])
 
-    # Liste Course (AVEC LES FEATURES FASTF1)
+    # Race features
     features_race = [
         "grid",
         "form_race",
@@ -249,7 +249,9 @@ def train_models(df_train):
     model_race = RandomForestRegressor(**params_race)
     model_race.fit(df_train[features_race], df_train["position"])
 
-    # === Feature Importances ===
+    """
+    Feature Importances - OPTIONAL, ONLY FOR IMPROVEMENTS/DEBUTS
+    """
     
     qualif_importances = get_feature_importances(model_qualif, features_qualif)
     race_importances = get_feature_importances(model_race, features_race)
@@ -263,24 +265,30 @@ def train_models(df_train):
 
     return model_qualif, model_race
 
+# ---------------------------------------------------------
+# 7) Predictions
+# ---------------------------------------------------------
 
-# ---------------------------------------------------------
-# 7) Prédiction (TA VERSION CORRIGÉE)
-# ---------------------------------------------------------
 def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_team, le_circuit, full_df, use_real_grid=False):
     model_qualif, model_race = models
     simulation_results = []
     # -----------------------------
-    # Valeurs par défaut
+    # Helper: Driver Name Map
+    # -----------------------------
+    name_map = {}
+    if "DriverName" in full_df.columns:
+        # We drop duplicates to keep the mapping unique
+        name_map = full_df.dropna(subset=["DriverName"]).set_index("DriverKey")["DriverName"].to_dict()
+    # -----------------------------
+    # Default values
     # -----------------------------
     default_race_pace = (full_df["career_race_pace"].median() if "career_race_pace" in full_df else 95.0)
     default_best_lap = (full_df["career_best_lap"].median() if "career_best_lap" in full_df else 95.0)
     default_pit_loss = (full_df["career_pit_loss"].median() if "career_pit_loss" in full_df else 25.0)
     # -----------------------------
-    # 1. Circuit ID + importance
+    # 1. Circuit ID + Importance
     # -----------------------------
     target_race_info = full_df[(full_df["year"] == year) & (full_df["round"] == target_round)]
-
     impact_val = 0.5
     circuit_name_str = "unknown"
 
@@ -294,7 +302,7 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
         c_id = 0
 
     # -----------------------------
-    # 2. Récupération stats pilotes
+    # 2. Retrieve driver stats
     # -----------------------------
     last_stats_map = {}
 
@@ -327,9 +335,8 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
                     stats[k] = last[k]
 
         last_stats_map[driver] = stats
-
     # -----------------------------
-    # 3. Prédiction pilote par pilote
+    # 3. Driver-by-driver prediction
     # -----------------------------
     for _, row in drivers_df.iterrows():
         driver = row["DriverKey"]
@@ -338,12 +345,15 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
 
         if stats is None:
             continue
+        
+        # DISPLAY FIX: Get the nice name from our map, fallback to row, then to key
+        nice_name = name_map.get(driver, row.get("DriverName", driver.title()))
 
         try:
             d_id = le_driver.transform([driver])[0]
             t_id = le_team.transform([team])[0]
 
-            # ===== QUALIF (si grille IA) =====
+            # ===== QUALIFYING (if AI grid) =====
             X_q = pd.DataFrame([[
                 t_id, d_id, year,
                 stats["form_grid"], impact_val, c_id,
@@ -360,7 +370,7 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             if use_real_grid and "grid" in row and not pd.isna(row["grid"]):
                 grid_input = row["grid"]
 
-            # ===== COURSE =====
+            # ===== RACE =====
             X_r = pd.DataFrame([[
                 grid_input,
                 stats["form_race"],
@@ -389,34 +399,33 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
 
             simulation_results.append({
                 "DriverKey": driver,
-                "DriverName": row.get("DriverName", driver.title()),
-                "Ecurie": team,
+                "DriverName": nice_name, # <--- Used the fixed name here
+                "Team": team,
                 "Course_Score": pred_race,
                 "Grid_Input": grid_input
             })
 
         except Exception as e:
-            # 👉 utile au debug, tu pourras retirer plus tard
+            # 👉 useful for debugging, can be removed later
             print(f"[PRED ERROR] {driver} → {e}")
             continue
 
     return pd.DataFrame(simulation_results)
 
-
-
 # ---------------------------------------------------------
-# 8) FONCTION PRINCIPALE
+# 8) MAIN FUNCTION
 # ---------------------------------------------------------
+
 def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=False):
     print(f"\n--- MACHINE LEARNING : {gp_name} ({target_year}) ---")
     
-    # 1) Enrichissement
+    # 1) Enrichment
     df = add_dual_form(df)
     df = add_circuit_impact(df)
     df = add_fastf1_features(df)
     df = add_driver_history(df)
 
-    # 2) Encodage
+    # 2) Encoding
     df_clean, le_driver, le_team, le_circuit = encode_data(df)
 
     # 3) Split
@@ -424,12 +433,12 @@ def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=Fals
     df_train = df_clean[mask_train]
 
     models = train_models(df_train)
-    print("   -> Modèles entraînés.")
+    print("   -> Models trained.")
 
-    # 4) Grille
+    # 4) Grid
     target_list = get_race_participants(df, target_year, target_round)
 
-    # Gestion grille réelle
+    # Real grid management
     has_grid_in_main = "grid" in target_list.columns and target_list["grid"].notna().any()
     has_grid_in_latest = has_real_qualifying(target_year, target_round)
 
@@ -439,38 +448,38 @@ def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=Fals
         elif has_grid_in_latest:
             target_list = load_real_qualifying(target_year, target_round)
         else:
-            print("❗Grille réelle indisponible. Passage en mode Grille IA.")
+            print("❗Real grid unavailable. Switching to AI grid mode.")
             use_real_grid = False
     
     if target_list.empty:
-        print("❌ Erreur : Liste des participants vide.")
+        print("❌ Error: participant list is empty")
         return
 
-    # 5) Prédiction
+    # 5) Prediction
     results = predict_race_outcome(
         models, target_list, target_year, target_round,
         le_driver, le_team, le_circuit, df, use_real_grid
     )
     
     if results.empty:
-        print("❌ Erreur : Aucune prédiction générée.")
+        print("❌ Error: no prediction generated.")
         return
 
-    # 6) Affichage
+    # 6) Display
     results = results.sort_values("Grid_Input")
-    results["Grille"] = range(1, len(results) + 1)
+    results["Grid"] = range(1, len(results) + 1)
     results = results.sort_values("Course_Score")
     results["Pos"] = range(1, len(results) + 1)
-    results["Delta"] = results["Grille"] - results["Pos"]
+    results["Delta"] = results["Grid"] - results["Pos"]
     results = results.sort_values("Pos")
 
-    print("\nRÉSULTATS DE LA SIMULATION :")
-    print(results[["Pos", "DriverName", "Ecurie", "Grille", "Delta"]].head(20).to_string(index=False))
+    print("\nSIMULATION RESULTS:")
+    print(results[["Pos", "DriverName", "Team", "Grid", "Delta"]].head(20).to_string(index=False))
 
 
 def get_feature_importances(model, feature_names):
     """
-    Retourne un DataFrame trié des feature importances d'un modèle sklearn
+    Return a sorted DataFrame of a sklearn model's feature importances
     """
     return (
         pd.DataFrame({
