@@ -3,7 +3,7 @@ from src.ml_model import train_and_predict
 
 def main():
     df = load_data()
-
+ 
     if df is None:
         print("❌ Unable to load database f1_data_complete.csv")
         return
