@@ -240,11 +240,11 @@ Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 
 | Metric      | 🔮 Oracle Mode | 🔬 Analyst Mode |
 | ----------- | -------------- | --------------- |
-| Winner (P1) | 20,8%          | 66,7%           |
-| Top 3       | 16,7%          | 45,8%           |
-| Top 5       | 13,3%          | 40,0%           |
-| Top 10      | 12,9%          | 26,2%           |
-| MAE         | 3,08           | 2,39            |
+| Winner (P1) | 20.8%          | 66.7%           |
+| Top 3       | 16.7%          | 45.8%           |
+| Top 5       | 13.3%          | 40.0%           |
+| Top 10      | 12.9%          | 26.2%           |
+| MAE         | 3.08           | 2.39            |
 
 > Analyst Mode isolates race modelling using the real starting grid.
 > Oracle Mode evaluates the full predictive pipeline (qualifying + race).
