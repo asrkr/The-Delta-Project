@@ -230,20 +230,20 @@ def encode_data(df):
 def train_models(df_train):
     # RandomForest hyperparameters
     params_qualif = {
-        "n_estimators": 200,
-        "max_depth": None,
-        "min_samples_split": 6,
-        "min_samples_leaf": 1,
-        "max_features": "sqrt",
+        "n_estimators": 173,
+        "max_depth": 15,
+        "min_samples_split": 8,
+        "min_samples_leaf": 7,
+        "max_features": "log2",
         "bootstrap": False,
         "random_state": 42,
         "n_jobs": -1
     }
     params_race = {
-        "n_estimators": 200,
-        "max_depth": 18,
-        "min_samples_split": 6,
-        "min_samples_leaf": 8,
+        "n_estimators": 1055,
+        "max_depth": 13,
+        "min_samples_split": 13,
+        "min_samples_leaf": 7,
         "max_features": None,
         "bootstrap": True,
         "random_state": 42,
@@ -455,6 +455,8 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
 def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=False):
     print(f"\n--- MACHINE LEARNING : {gp_name} ({target_year}) ---")
     
+    df = df.copy()
+    df = df[(df["year"] < target_year) | ((df["year"] == target_year) & (df["round"] <= target_round))]
     # 1) Enrichment
     df = add_dual_form(df)
     df = add_circuit_impact(df)

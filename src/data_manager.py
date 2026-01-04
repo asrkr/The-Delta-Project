@@ -28,6 +28,16 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 fastf1.Cache.enable_cache(CACHE_DIR)
 
 
+# Driver key aliases
+DRIVER_KEY_ALIASES = {
+    "a_antonelli": "k_antonelli"
+}
+
+def canonicalize_driver_key(raw_key):
+    if not raw_key:
+        return raw_key
+    return DRIVER_KEY_ALIASES.get(raw_key, raw_key)
+
 # -------------------------------------------------------------------
 # DRIVER KEY CREATION
 # -------------------------------------------------------------------
@@ -47,7 +57,7 @@ def make_driver_key(given_name: str, family_name: str) -> str:
     if not g or not f:
         return None
     driver_key = f"{g[0]}_{f}"
-    return driver_key
+    return canonicalize_driver_key(driver_key)
 
 
 # -------------------------------------------------------------------
@@ -113,8 +123,8 @@ def fetch_qualifying_results(year, rnd):
         df = pd.DataFrame(quali_results)
         
         # Clean data extraction
-        df["DriverKey"] = df["Driver"].apply(lambda x: make_driver_key(x.get("givenName", ""), x.get("familyName", "")))
-        df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get("givenName", "")} {x.get("familyName", "")}".strip())
+        df["DriverKey"] = df["Driver"].apply(lambda x: make_driver_key(x.get('givenName', ''), x.get('familyName', '')))
+        df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get('givenName', '')} {x.get('familyName', '')}".strip())
         df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
         
         # IMPORTANT: Standardize column name for the rest of the pipeline
@@ -177,7 +187,7 @@ def fetch_sprint_results(year, rnd):
 
         # Cleaning and key generation
         df["DriverKey"] = df["Driver"].apply(lambda x: make_driver_key(x.get("givenName", ""), x.get("familyName", "")))
-        df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get("givenName", "")} {x.get("familyName", "")}".strip())
+        df["DriverName"] = df["Driver"].apply(lambda x: f"{x.get('givenName', '')} {x.get('familyName', '')}".strip())
         df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
 
         # numeric conversions
@@ -358,11 +368,28 @@ def extract_fastf1_features(start_year, end_year):
 
             try:
                 session = fastf1.get_session(year, rnd, "R")
-                session.load(telemetry=False, weather=False)
+                session.load(telemetry=False, weather=True)
                 laps = session.laps
                 drivers = session.drivers
+
+                # v1.8 : weather data collection
+                w_data = session.weather_data
+                # 1) Did it rained?
+                if w_data is not None and "Rainfall" in w_data.columns:
+                    rain_flag = 1 if w_data["Rainfall"].any() else 0
+                else:
+                    rain_flag = 0   # dry by default (if no data)
+                
+                # 2) average temp on track
+                if w_data is not None and "TrackTemp" in w_data.columns:
+                    track_temp_avg = w_data["TrackTemp"].mean()
+                    if pd.isna(track_temp_avg): 
+                        track_temp_avg = 30.0 # default value if no data
+
             except Exception as e:
                 print(" ⚠️ FastF1 Error:", e)
+                rain_flag = 0
+                track_temp_avg = 30.0
                 continue
 
             for d in drivers:
@@ -375,30 +402,67 @@ def extract_fastf1_features(start_year, end_year):
                 given_name = drv_info.get("FirstName", "")
                 family_name = drv_info.get("LastName", "")
 
+                # =============================
+                # [MODIF v1.8] CLEAN AIR PACE
+                # =============================
+                
+                # 1. Tentative de filtrage "Chirurgical" (Drapeau Vert uniquement)
+                try:
+                    # '1' = Track Clear (Green Flag). On retire aussi les stands et les tours lents.
+                    clean_laps = drv_laps.pick_track_status('1').pick_wo_box().pick_quicklaps()
+                except:
+                    # Fallback pour les années anciennes ou données incomplètes
+                    clean_laps = drv_laps.pick_wo_box().pick_quicklaps()
+
+                # 2. Calcul du Top 25%
+                clean_times = clean_laps["LapTime"].dt.total_seconds().dropna()
+                
+                if clean_times.empty:
+                    clean_air_pace = np.nan
+                else:
+                    quantile_25 = int(len(clean_times) * 0.25)
+                    if quantile_25 < 1:
+                        # Moins de 4 tours propres ? On prend la moyenne dispo
+                        clean_air_pace = clean_times.mean()
+                    else:
+                        # Moyenne des meilleurs tours (nsmallest)
+                        clean_air_pace = clean_times.nsmallest(quantile_25).mean()
+
+                # =============================
+                # GLOBAL PACE (Classique)
+                # =============================
+                # On garde aussi la moyenne globale "brute" (avec trafic) pour comparer
+                all_times = drv_laps["LapTime"].dt.total_seconds().dropna()
+                
+                if all_times.empty:
+                    continue # Si vraiment aucun temps, on skip le pilote
+
+                avg_pace_val = all_times.mean()
+                best_lap_val = all_times.min()
+
+                # Création de l'entrée avec la nouvelle feature
                 entry = {
                     "year": year,
                     "round": rnd,
                     "DriverNumber": d,
                     "DriverKey": make_driver_key(given_name, family_name),
                     "DriverName": drv_info.get("FullName", ""),
-                    "Team": drv_info.get("TeamName", "")
+                    "Team": drv_info.get("TeamName", ""),
+                    "clean_air_pace": clean_air_pace,   # v1.8
+                    "avg_race_pace": avg_pace_val,
+                    "is_rainy": rain_flag,  # v1.8
+                    "track_temp": track_temp_avg,   # v1.8
+                    "best_lap": best_lap_val
                 }
-                # =============================
-                # GLOBAL PACE
-                # =============================
-                lap_times = drv_laps["LapTime"].dt.total_seconds().dropna()
-                if lap_times.empty:
-                    continue
-                entry["avg_race_pace"] = lap_times.mean()
-                entry["best_lap"] = lap_times.min()
+
                 # =============================
                 # PIT STOPS / PIT LOSS 
                 # =============================
                 pit_mask = drv_laps["PitOutTime"].notna() | drv_laps["PitInTime"].notna()
                 entry["pitstops_count"] = pit_mask.sum()
 
-                median_pace = lap_times.median()
-                pit_losses = (lap_times[pit_mask] - median_pace).clip(lower=0)
+                median_pace = all_times.median()
+                pit_losses = (all_times[pit_mask] - median_pace).clip(lower=0)
 
                 entry["mean_pit_loss"] = (
                     pit_losses.mean() if not pit_losses.empty else np.nan
@@ -451,8 +515,9 @@ def extract_fastf1_features(start_year, end_year):
                 # =============================
                 # CONSISTENCY
                 # =============================
-                entry["long_run_consistency"] = lap_times.std()
+                entry["long_run_consistency"] = all_times.std()
                 all_entries.append(entry)
+        time.sleep(5)
 
     # =============================
     # SAVE (INCREMENTAL)
