@@ -6,6 +6,51 @@ The project follows a versioned, iterative development approach focused on model
 
 ---
 
+## [v1.7.1] – Stability & Temporal Integrity  
+**Release date:** 2026
+
+### ✨ Added
+- **Strict temporal integrity guarantees** across:
+  - Single-race prediction pipeline (no future races used to compute features).
+  - Internal season benchmarking workflow (walk-forward logic).
+  - Hyperparameter tuning (race-by-race validation aligned with real usage).
+- **Canonical driver identity layer**:
+  - Introduced explicit aliasing to enforce consistent `DriverKey` across data sources
+    (e.g. multi-first-name vs short-first-name discrepancies).
+  - Prevents silent merge failures between Ergast / FastF1 / Sprint datasets.
+- **Walk-forward tuning script (v1.7.1)**:
+  - Hyperparameters optimized independently for Qualifying and Race models using
+    strict time-based folds (train on past → validate on the next race).
+
+### 🔄 Changed
+- **Validation methodology upgraded**:
+  - All evaluation workflows are now aligned around a single principle:
+    *features must be computed using past-only information relative to the target race*.
+- **Benchmark transparency**:
+  - Internal backtesting is explicitly treated as a development/validation tool
+    (not part of the public repository), while ensuring results remain comparable and reproducible.
+
+### 🐞 Fixed
+- **Temporal leakage sources** affecting:
+  - Circuit impact estimation and global imputations when computed on full datasets.
+  - Feature computation order in prediction/tuning workflows.
+- **Driver identity inconsistencies** (e.g. differing given names across APIs) causing:
+  - Missing merges,
+  - Rookie edge cases,
+  - Unstable feature availability for some drivers.
+
+### ✅ Validated
+- Training always uses **strictly prior races** for each target event.
+- Canonical `DriverKey` prevents cross-source mismatches and improves merge stability.
+- Tuning results are now directly applicable to real-world prediction usage.
+
+### ⚠️ Design Notes
+- This is a **stability release**: no new modelling concepts are introduced.
+- Stochastic race events remain intentionally out of scope (DNFs, SC, crashes, randomness).
+- Weather is still treated as non-stochastic in this branch; deterministic weather context is planned for v1.8.
+
+---
+
 ## [v1.7.0] – The Sprint Update  
 **Release date:** 2025
 
@@ -109,6 +154,11 @@ The project follows a versioned, iterative development approach focused on model
 ---
 
 ## 🔮 Next Version
+
+**v1.8 – Weather & Clean Air Context**
+- `clean_air_pace`
+- `is_rainy`
+- `track_temp`
 
 **v2.0 – Probabilistic & Ranking Models**
 - Qualifying as Learning-to-Rank.
