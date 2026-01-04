@@ -6,6 +6,47 @@ The project follows a versioned, iterative development approach focused on model
 
 ---
 
+## [v1.8.0] – Clean Air & Weather Context  
+**Release date:** 2026
+
+### ✨ Added
+- **Clean-air pace integration (FastF1)**:
+  - New telemetry signal: `clean_air_pace`
+  - Aggregated career feature: `career_clean_air_pace` (past-only, expanding mean with shift)
+- **Deterministic race-day weather context**:
+  - `is_rainy` (binary race context flag)
+  - `track_temp` (track temperature context)
+- **Wet-skill driver profiling (contextual, past-only)**:
+  - `career_wet_skill` based on average *rainy* gain/loss (grid → finish) computed using strict past-only history
+- **Optuna-only walk-forward tuning workflow (internal dev tool)**:
+  - Qualifying and Race models optimized independently with time-split folds (train on past → validate on next race)
+  - Defaults chosen to avoid manual fold/trial tuning and reduce overfitting to a single season
+- **Extended validation battery**:
+  - Stress-tested across tricky seasons (calendar irregularities, mixed formats, regulation shifts)
+  - Forward-style validation including Oracle vs Analyst comparison
+
+### 🔄 Changed
+- **Race feature set enriched** with contextual signals (clean air + weather) while keeping the core “Dual Brain” logic unchanged.
+- **Telemetry merge robustness improved**:
+  - Safe defaults for missing FastF1 values (especially pre-2018 coverage gaps).
+  - Type-safe filling/casting for `is_rainy`, `track_temp`, pit metrics.
+
+### 🐞 Fixed
+- Edge cases where missing external telemetry columns could silently degrade feature availability.
+- Improved stability of “context” joins (weather / telemetry) so that prediction doesn’t depend on perfect coverage.
+
+### ✅ Validated
+- No detectable temporal leakage introduced by the new contextual features (past-only aggregation preserved).
+- Analyst mode remains consistently strong (race model isolated with real grid).
+- Oracle mode behaves realistically in forward conditions (controlled degradation when predicting both grid and race).
+
+### ⚠️ Design Notes
+- Clean-air / weather context is **deterministic** (not a stochastic simulator).
+- FastF1-derived features are primarily meaningful from **2018+**; earlier seasons fall back to neutral/median defaults by design.
+- Random race chaos remains intentionally out of scope (DNFs, safety cars, crashes, pure randomness).
+
+---
+
 ## [v1.7.1] – Stability & Temporal Integrity  
 **Release date:** 2026
 
@@ -154,11 +195,6 @@ The project follows a versioned, iterative development approach focused on model
 ---
 
 ## 🔮 Next Version
-
-**v1.8 – Weather & Clean Air Context**
-- `clean_air_pace`
-- `is_rainy`
-- `track_temp`
 
 **v2.0 – Probabilistic & Ranking Models**
 - Qualifying as Learning-to-Rank.
