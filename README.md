@@ -2,15 +2,15 @@
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat&logo=python)
 ![Machine Learning](https://img.shields.io/badge/Model-RandomForest-purple?style=flat&logo=scikit-learn)
-![Status](https://img.shields.io/badge/Status-V1.7.1_Stability_Release-green)
+![Status](https://img.shields.io/badge/Status-V1.8_Context_%26_Weather-green)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
 
 The project leverages historical data (from 2001) and Machine Learning (**Random Forest**) to simulate a full race weekend: from qualifying to the chequered flag.
 
-> **V1.7.1** is a stability-focused release that enforces **strict temporal integrity**
-> across training, internal benchmarking tools, and hyperparameter tuning.
+> **V1.8** extends the V1.7.1 stability work by introducing **clean-air pace** and **weather/temperature race context**
+> while keeping **strict temporal integrity** across training, internal benchmarking tools, and hyperparameter tuning.
 
 ---
 
@@ -32,12 +32,14 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
   - Incremental downloading and merging of race results from **2001 to present** (via Jolpica / Ergast).
   - Non-destructive updates: only the requested seasons are refreshed.
 
-- **Telemetry Integration (V1.6)**
-  - Advanced race metrics via **FastF1**:
+- **Telemetry Integration (V1.6 → V1.8)**
+  - Advanced race metrics via **FastF1** (telemetry available from **2018+**):
     - Average race pace
+    - **Clean-air pace** (V1.8)
     - Best lap
     - Number of pitstops
     - Average time lost in pitstops
+    - **Race-day weather context**: `is_rainy`, `track_temp` (V1.8)
   - Stored in a dedicated `f1_extra_features.csv` file and merged into the main dataset.
 
 - **Sprint Weekend Context (V1.7)**
@@ -61,14 +63,16 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
      - Grid position (real or predicted)
      - Race form (`form_race`)
      - Career race averages (`career_race_avg`)
-     - Pace telemetry (`career_race_pace`, `career_best_lap`, `career_pit_loss`)
+     - Pace telemetry (`career_race_pace`, `career_clean_air_pace`, `career_best_lap`, `career_pit_loss`) (V1.8)
      - Circuit-specific race skill (`circuit_race_skill`)
      - Sprint contextual signals (when applicable)
+     - **Weather context + wet skill** (`is_rainy`, `track_temp`, `career_wet_skill`) (V1.8)
 
-- **Pipeline Integrity & Validation (V1.7.1)**
+- **Pipeline Integrity & Validation (V1.7.1 → V1.8)**
   - Strict time-based evaluation: **no future race data** is used for feature computation, training, or tuning.
   - Canonical driver identity handling (`DriverKey`) to prevent merge mismatches across sources (Ergast / FastF1 / sprint datasets).
   - Walk-forward hyperparameter tuning aligned with real-world usage (train on past races → validate on the next race).
+  - Forward-style validation on tricky seasons (regulation changes / mixed formats / limited history).
 
 - **Advanced Backtesting (Internal Tool)**
   - Full-season simulator:
@@ -108,7 +112,9 @@ Deliberately **not** modelled:
 - Safety cars
 - Mechanical failures
 - Crashes
-- Stochastic weather effects (for now)
+- Fully stochastic race chaos
+
+Weather is handled as **explicit race context** (rain flag + track temperature), not as a full stochastic simulator.
 
 The AI’s predictions should be interpreted as:
 
@@ -195,7 +201,15 @@ Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 
 ## 🗺️ Roadmap
 
-**Current status: V1.7.1 – Stability Release.**
+**Current status: V1.8 – Context & Weather Release.**
+
+### ✅ Phase 4: Context & Robustness (V1.8)
+
+* [x] Clean-air pace integration (`clean_air_pace` → `career_clean_air_pace`)
+* [x] Race-day weather context (`is_rainy`, `track_temp`)
+* [x] Wet performance context (`career_wet_skill`)
+* [x] Multi-season stress testing (2020 / 2021 / 2022)
+* [x] Forward-style validation (2025)
 
 ### ✅ Phase 3.5: Pipeline Stabilization (V1.7.1)
 
@@ -213,7 +227,7 @@ Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 * [x] Sprint weekend contextual integration
 * [x] Sprint-aware benchmarking and validation
 
-### 🚀 Phase 4: Next-Gen Models (V2.x)
+### 🚀 Phase 5: Next-Gen Models (V2.x)
 
 * Learning-to-Rank for qualifying
 * Gradient Boosting (LightGBM / CatBoost)
@@ -222,17 +236,20 @@ Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 
 ---
 
-## 📊 Current Performance (Reference Season – 2025, V1.7)
+## 📊 Current Performance (Reference Season – 2025, V1.8)
 
 | Metric      | 🔮 Oracle Mode | 🔬 Analyst Mode |
 | ----------- | -------------- | --------------- |
-| Winner (P1) | 29,2%          | 66,7%           |
-| Top 3       | 20,8%          | 43,1%           |
-| Top 5       | 15,8%          | 41,7%           |
-| Top 10      | 12,9%          | 27,5%           |
-| MAE         | 3,18           | 2,39            |
+| Winner (P1) | 20,8%          | 66,7%           |
+| Top 3       | 16,7%          | 45,8%           |
+| Top 5       | 13,3%          | 40,0%           |
+| Top 10      | 12,9%          | 26,2%           |
+| MAE         | 3,08           | 2,39            |
 
-> Benchmarks will be updated after the V1.7.1 stabilization work.
+> Analyst Mode isolates race modelling using the real starting grid.
+> Oracle Mode evaluates the full predictive pipeline (qualifying + race).
+>
+> Forward Oracle results are intentionally lower and reflect realistic uncertainty.
 
 ---
 
