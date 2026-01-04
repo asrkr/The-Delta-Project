@@ -588,9 +588,3 @@ def get_feature_importances(model, feature_names):
         .sort_values("importance", ascending=False)
         .reset_index(drop=True)
     )
-
-
-def add_sprint_features_test(df):
-    df["has_sprint"] = 0
-    df["sprint_delta"] = 0.0
-    return df
