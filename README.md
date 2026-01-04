@@ -226,11 +226,11 @@ Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 
 | Metric      | 🔮 Oracle Mode | 🔬 Analyst Mode |
 | ----------- | -------------- | --------------- |
-| Winner (P1) | 33,3%          | 62,5%           |
-| Top 3       | 22,2%          | 44,4%           |
-| Top 5       | 16,7%          | 35,8%           |
-| Top 10      | 14,2%          | 24,6%           |
-| MAE         | 4.16           | 3,42            |
+| Winner (P1) | 29,2%          | 66,7%           |
+| Top 3       | 20,8%          | 43,1%           |
+| Top 5       | 15,8%          | 41,7%           |
+| Top 10      | 12,9%          | 27,5%           |
+| MAE         | 3,18           | 2,39            |
 
 > Benchmarks will be updated after the V1.7.1 stabilization work.
 
