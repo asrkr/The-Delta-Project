@@ -79,11 +79,17 @@ def add_circuit_impact(df):
 
 def add_fastf1_features(df):
     extra = load_extra_features()
-    fastf1_cols = ["avg_race_pace", "best_lap", "pitstops_count", "mean_pit_loss"]
+    fastf1_cols = ["avg_race_pace", "clean_air_pace", "best_lap", "pitstops_count", "mean_pit_loss", "is_rainy", "track_temp"]
 
     # If no extra file, create empty columns (0.0)
     if extra is None or extra.empty:
-        for c in fastf1_cols: df[c] = 0.0
+        df["avg_race_pace"] = 0.0
+        df["clean_air_pace"] = 0.0
+        df["best_lap"] = 0.0
+        df["pitstops_count"] = 0
+        df["mean_pit_loss"] = 0.0
+        df["is_rainy"] = 0
+        df["track_temp"] = 30.0
         return df
 
     # Clean mean_pit_loss if necessary
@@ -107,16 +113,32 @@ def add_fastf1_features(df):
 
     df = df.merge(extra[cols_to_merge], on=["year","round","DriverKey"], how="left", suffixes=("", "_extra"))
 
-    # Fill NaNs (Median or 0)
-    for c in fastf1_cols:
+    # Fill NaNs (Median or 0) + types
+    for c in ["avg_race_pace", "clean_air_pace", "best_lap", "mean_pit_loss"]:
         if c in df.columns:
             med = df[c].median()
-            val = 0.0 if pd.isna(med) else med
-            df[c] = df[c].fillna(val)
+            df[c] = df[c].fillna(0.0 if pd.isna(med) else med).astype(float)
         else:
             df[c] = 0.0
-            
+
+    if "pitstops_count" in df.columns:
+        df["pitstops_count"] = df["pitstops_count"].fillna(0).astype(int)
+    else:
+        df["pitstops_count"] = 0
+
+    if "is_rainy" in df.columns:
+        df["is_rainy"] = df["is_rainy"].fillna(0).astype(int)
+    else:
+        df["is_rainy"] = 0
+
+    if "track_temp" in df.columns:
+        medt = df["track_temp"].median()
+        df["track_temp"] = df["track_temp"].fillna(30.0 if pd.isna(medt) else medt).astype(float)
+    else:
+        df["track_temp"] = 30.0
+
     return df
+
 
 # ---------------------------------------------------------
 # 4) SPRINT FEATURES
@@ -153,9 +175,11 @@ def add_sprint_features(df):
 
 def add_driver_history(df):
     df = df.sort_values(["year", "round"])
+    df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
+    df["position"] = pd.to_numeric(df["position"], errors="coerce")
     
     # Safety: ensure FastF1 columns exist before transform
-    for c in ["avg_race_pace", "best_lap", "mean_pit_loss"]:
+    for c in ["avg_race_pace", "clean_air_pace", "best_lap", "mean_pit_loss", "is_rainy"]:
         if c not in df.columns: df[c] = 0.0
 
     grp = df.groupby("DriverKey")
@@ -166,8 +190,12 @@ def add_driver_history(df):
     
     # FastF1 stats
     df["career_race_pace"] = grp["avg_race_pace"].transform(lambda x: x.shift(1).expanding().mean())
+    df["career_clean_air_pace"] = grp["clean_air_pace"].transform(lambda x: x.shift(1).expanding().mean())
     df["career_best_lap"] = grp["best_lap"].transform(lambda x: x.shift(1).expanding().mean())
     df["career_pit_loss"] = grp["mean_pit_loss"].transform(lambda x: x.shift(1).expanding().mean())
+    # v1.8 : wet skill (average positions gained under rainy races (grid -> finish), past-only)
+    df["wet_gain"] = np.where(df["is_rainy"] == 1, (df["grid"] - df["position"]), np.nan)
+    df["career_wet_skill"] = grp["wet_gain"].transform(lambda x: x.shift(1).expanding().mean())
 
     # Circuit stats
     if "circuitId" in df.columns:
@@ -182,11 +210,12 @@ def add_driver_history(df):
     cols_fill = ["career_grid_avg", "career_race_avg", "circuit_grid_skill", "circuit_race_skill"]
     df[cols_fill] = df[cols_fill].fillna(14.0)
     
-    cols_fill_f1 = ["career_race_pace", "career_best_lap", "career_pit_loss"]
+    cols_fill_f1 = ["career_race_pace", "career_clean_air_pace", "career_best_lap", "career_pit_loss", "career_wet_skill"]
     for c in cols_fill_f1:
-        med = df[c].median()
-        val = 0.0 if pd.isna(med) else med
-        df[c] = df[c].fillna(df.groupby("DriverKey")[c].transform("median"))
+        global_med = df[c].median()
+        global_default = 0.0 if pd.isna(global_med) else global_med
+        per_driver_med = df.groupby("DriverKey")[c].transform("median")
+        df[c] = df[c].fillna(per_driver_med).fillna(global_default)
 
     df["pace_rank_season"] = (df.groupby(["year"])["career_race_pace"].rank(method="dense"))
     df["pace_rank_season"] = (df.groupby("year")["pace_rank_season"].transform(lambda x: x / x.max()))
@@ -230,20 +259,20 @@ def encode_data(df):
 def train_models(df_train):
     # RandomForest hyperparameters
     params_qualif = {
-        "n_estimators": 173,
-        "max_depth": 15,
-        "min_samples_split": 8,
-        "min_samples_leaf": 7,
-        "max_features": "log2",
+        "n_estimators": 248,
+        "max_depth": 16,
+        "min_samples_split": 10,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
         "bootstrap": False,
         "random_state": 42,
         "n_jobs": -1
     }
     params_race = {
-        "n_estimators": 1055,
+        "n_estimators": 320,
         "max_depth": 13,
         "min_samples_split": 13,
-        "min_samples_leaf": 7,
+        "min_samples_leaf": 5,
         "max_features": None,
         "bootstrap": True,
         "random_state": 42,
@@ -271,8 +300,9 @@ def train_models(df_train):
         "team_id", "driver_id", "year", 
         "circuit_importance", "circuit_id",
         "circuit_race_skill",
-        "career_race_pace", "career_best_lap", "career_pit_loss",
-        "has_sprint", "sprint_delta"
+        "career_race_pace", "career_clean_air_pace", "career_best_lap", "career_pit_loss", "career_wet_skill",
+        "has_sprint", "sprint_delta",
+        "is_rainy", "track_temp"
     ]
     features_race = [f for f in features_race if f in df_train.columns]
 
@@ -314,6 +344,9 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
     default_race_pace = (full_df["career_race_pace"].median() if "career_race_pace" in full_df else 95.0)
     default_best_lap = (full_df["career_best_lap"].median() if "career_best_lap" in full_df else 95.0)
     default_pit_loss = (full_df["career_pit_loss"].median() if "career_pit_loss" in full_df else 25.0)
+    default_clean_air = (full_df["career_clean_air_pace"].median() if "career_clean_air_pace" in full_df else 95.0)
+    default_wet_skill = (full_df["career_wet_skill"].median() if "career_wet_skill" in full_df else 0.0)
+    default_track_temp = (full_df["track_temp"].median() if "track_temp" in full_df else 30.0)
     # -----------------------------
     # 1. Circuit ID + Importance
     # -----------------------------
@@ -354,7 +387,9 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             "career_race_pace": default_race_pace,
             "career_best_lap": default_best_lap,
             "career_pit_loss": default_pit_loss,
-            "pace_rank_season": 0.5
+            "pace_rank_season": 0.5,
+            "career_clean_air_pace": default_clean_air,
+            "career_wet_skill": default_wet_skill
         }
 
         if not history.empty:
@@ -403,6 +438,9 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             has_sprint_val = row["has_sprint"] if "has_sprint" in row else 0
             s_delta = row["sprint_delta"] if "sprint_delta" in row and pd.notna(row["sprint_delta"]) else 0.0
 
+            is_rainy_val = int(row["is_rainy"]) if "is_rainy" in row and pd.notna(row["is_rainy"]) else 0
+            track_temp_val = float(row["track_temp"]) if "track_temp" in row and pd.notna(row["track_temp"]) else float(default_track_temp)
+
             # ===== RACE =====
             X_r = pd.DataFrame([[
                 grid_input,
@@ -413,10 +451,12 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
                 impact_val, c_id,
                 stats["circuit_race_skill"],
                 stats["career_race_pace"],
+                stats["career_clean_air_pace"],
                 stats["career_best_lap"],
                 stats["career_pit_loss"],
-                has_sprint_val,
-                s_delta
+                stats["career_wet_skill"],
+                has_sprint_val, s_delta,
+                is_rainy_val, track_temp_val
             ]], columns=[
                 "grid",
                 "form_race",
@@ -426,9 +466,12 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
                 "circuit_importance", "circuit_id",
                 "circuit_race_skill",
                 "career_race_pace",
+                "career_clean_air_pace",
                 "career_best_lap",
                 "career_pit_loss",
-                "has_sprint", "sprint_delta"
+                "career_wet_skill",
+                "has_sprint", "sprint_delta",
+                "is_rainy", "track_temp"
             ])
 
             pred_race = model_race.predict(X_r)[0]
@@ -476,6 +519,18 @@ def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=Fals
 
     # 4) Grid
     target_list = get_race_participants(df, target_year, target_round)
+
+    # weather management
+    ctx_cols = ["DriverKey", "has_sprint", "sprint_delta", "is_rainy", "track_temp"]
+    existing = [c for c in ctx_cols if c in df.columns]
+    if "DriverKey" in existing and len(existing) > 1:
+        race_ctx = df[(df["year"] == target_year) & (df["round"] == target_round)][existing].drop_duplicates()
+        target_list = target_list.merge(race_ctx, on="DriverKey", how="left")
+
+    for c, default in [("has_sprint", 0), ("sprint_delta", 0.0), ("is_rainy", 0), ("track_temp", 30.0)]:
+        if c in target_list.columns:
+            target_list[c] = target_list[c].fillna(default)
+
 
     # Real grid management
     has_grid_in_main = "grid" in target_list.columns and target_list["grid"].notna().any()
