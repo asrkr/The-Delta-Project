@@ -2,12 +2,15 @@
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat&logo=python)
 ![Machine Learning](https://img.shields.io/badge/Model-RandomForest-purple?style=flat&logo=scikit-learn)
-![Status](https://img.shields.io/badge/Status-V1.7_Sprint_Context-green)
+![Status](https://img.shields.io/badge/Status-V1.7.1_Stability_Release-green)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
 
 The project leverages historical data (from 2001) and Machine Learning (**Random Forest**) to simulate a full race weekend: from qualifying to the chequered flag.
+
+> **V1.7.1** is a stability-focused release that enforces **strict temporal integrity**
+> across training, internal benchmarking tools, and hyperparameter tuning.
 
 ---
 
@@ -62,7 +65,12 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
      - Circuit-specific race skill (`circuit_race_skill`)
      - Sprint contextual signals (when applicable)
 
-- **Advanced Backtesting**
+- **Pipeline Integrity & Validation (V1.7.1)**
+  - Strict time-based evaluation: **no future race data** is used for feature computation, training, or tuning.
+  - Canonical driver identity handling (`DriverKey`) to prevent merge mismatches across sources (Ergast / FastF1 / sprint datasets).
+  - Walk-forward hyperparameter tuning aligned with real-world usage (train on past races → validate on the next race).
+
+- **Advanced Backtesting (Internal Tool)**
   - Full-season simulator:
     - **Oracle Mode**: the AI predicts the grid and the race.
     - **Analyst Mode**: the AI receives the *real* starting grid and only predicts the race outcome.
@@ -71,6 +79,7 @@ The Greek initial for *Delphi* is **Delta** (Δ). It fits perfectly as a double 
     - Top 3 / Top 5 / Top 10 (strict order)
     - Mean Absolute Error (MAE) on predicted positions.
   - Sprint-aware benchmarks (Sprint vs Non-Sprint weekends).
+  > Note: this simulator is a **personal/internal development tool** and is **not included** in the public repository.
 
 - **Dynamic Driver Management**
   - Automatic detection of race participants based on the historical entry list.
@@ -99,7 +108,7 @@ Deliberately **not** modelled:
 - Safety cars
 - Mechanical failures
 - Crashes
-- Weather randomness (for now)
+- Stochastic weather effects (for now)
 
 The AI’s predictions should be interpreted as:
 
@@ -179,17 +188,20 @@ python main.py
 
 ### 4. Run a Season Simulation (Dev / Benchmark)
 
-```bash
-python dev_tools/simulateur_saison.py
-```
-
-Sprint-aware benchmarks can be run using dedicated benchmark scripts.
+Season simulation is performed using an **internal development tool** (not included in the public repository).
+Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 
 ---
 
 ## 🗺️ Roadmap
 
-**Current status: V1.7 – Sprint Context.**
+**Current status: V1.7.1 – Stability Release.**
+
+### ✅ Phase 3.5: Pipeline Stabilization (V1.7.1)
+
+* [x] Temporal leak removal (training / internal simulation / tuning)
+* [x] Walk-forward evaluation alignment
+* [x] Canonical driver identity handling (`DriverKey`) across sources
 
 ### ✅ Phase 3: Strategy & Environment (V1.6–V1.7)
 
@@ -219,6 +231,8 @@ Sprint-aware benchmarks can be run using dedicated benchmark scripts.
 | Top 5       | 16,7%          | 35,8%           |
 | Top 10      | 14,2%          | 24,6%           |
 | MAE         | 4.16           | 3,42            |
+
+> Benchmarks will be updated after the V1.7.1 stabilization work.
 
 ---
 
