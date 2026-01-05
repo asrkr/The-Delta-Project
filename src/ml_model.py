@@ -234,8 +234,11 @@ def encode_data(df):
     le_team = LabelEncoder()
     le_circuit = LabelEncoder()
 
+    team_col = "TeamKey" if "TeamKey" in df.columns else "Team"
+
     all_drivers = df["DriverKey"].astype(str).unique()
-    all_teams = df["Team"].astype(str).unique()
+    all_teams = df[team_col].astype(str).unique()
+
     if "circuitId" in df.columns:
         all_circuits = df["circuitId"].astype(str).unique()
     else:
@@ -247,15 +250,15 @@ def encode_data(df):
     le_circuit.fit(all_circuits)
 
     df_clean["driver_id"] = le_driver.transform(df_clean["DriverKey"].astype(str))
-    df_clean["team_id"] = le_team.transform(df_clean["Team"].astype(str))
+    df_clean["team_id"] = le_team.transform(df_clean[team_col].astype(str))
     df_clean["circuit_id"] = le_circuit.transform(df_clean["circuitId"].astype(str))
 
     return df_clean, le_driver, le_team, le_circuit
 
-
 # ---------------------------------------------------------
 # 7) Model training
 # ---------------------------------------------------------
+
 def train_models(df_train):
     # RandomForest hyperparameters
     params_qualif = {
@@ -404,7 +407,7 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
     # -----------------------------
     for _, row in drivers_df.iterrows():
         driver = row["DriverKey"]
-        team = row["Team"]
+        team_key = (row["TeamKey"] if "TeamKey" in row and pd.notna(row["TeamKey"]) else "unknown")
         stats = last_stats_map.get(driver)
 
         if stats is None:
@@ -412,10 +415,11 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
         
         # DISPLAY FIX: Get the nice name from our map, fallback to row, then to key
         nice_name = name_map.get(driver, row.get("DriverName", driver.title()))
+        team_display = (row["Team"] if "Team" in row and pd.notna(row["Team"]) else team_key.replace("_", " ").title())
 
         try:
             d_id = le_driver.transform([driver])[0]
-            t_id = le_team.transform([team])[0]
+            t_id = le_team.transform([str(team_key)])[0]
 
             # ===== QUALIFYING (if AI grid) =====
             X_q = pd.DataFrame([[
@@ -479,7 +483,7 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
             simulation_results.append({
                 "DriverKey": driver,
                 "DriverName": nice_name, # <--- Used the fixed name here
-                "Team": team,
+                "Team": team_display,
                 "Course_Score": pred_race,
                 "Grid_Input": grid_input
             })
