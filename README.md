@@ -242,7 +242,7 @@ Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 | ----------- | -------------- | --------------- |
 | Winner (P1) | 29.2%          | 66.7%           |
 | Top 3       | 19.4%          | 44.4%           |
-| Top 5       | 15.O%          | 41.7%           |
+| Top 5       | 15.0%          | 41.7%           |
 | Top 10      | 10.8%          | 27.5%           |
 | MAE         | 3.15           | 2.41            |
 
