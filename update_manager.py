@@ -83,6 +83,7 @@ if __name__ == "__main__":
         update_database(y1, y3)
         update_calendar(y1, y3)
         extract_fastf1_features(y2, y3)
+        update_sprint_data(2021, y3)
         update_latest_qualifying(y3, rnd)
     
 
