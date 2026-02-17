@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore", message="Mean of empty slice")
 # 1) Driver recent form (last 3 GPs)
 # ---------------------------------------------------------
 
-def add_dual_form(df):
+def add_dual_form(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(by=["year", "round"])
     df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
     df["position"] = pd.to_numeric(df["position"], errors="coerce")
@@ -34,7 +34,7 @@ def add_dual_form(df):
 # 2) Circuit importance
 # ---------------------------------------------------------
 
-def add_circuit_impact(df):
+def add_circuit_impact(df: pd.DataFrame) -> pd.DataFrame:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     calendar_path = os.path.join(os.path.dirname(current_dir), "data", "races_calendar.csv")
 
@@ -78,7 +78,7 @@ def add_circuit_impact(df):
 # 3) FastF1 features (robust handling)
 # ---------------------------------------------------------
 
-def add_fastf1_features(df):
+def add_fastf1_features(df: pd.DataFrame) -> pd.DataFrame:
     extra = load_extra_features()
     fastf1_cols = ["avg_race_pace", "clean_air_pace", "best_lap", "pitstops_count", "mean_pit_loss", "is_rainy", "track_temp"]
 
@@ -145,7 +145,7 @@ def add_fastf1_features(df):
 # 4) SPRINT FEATURES
 # ---------------------------------------------------------
 
-def add_sprint_features(df):
+def add_sprint_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Adds contextual features from sprint results
     Strategy: additive (sprint = context, not target)
@@ -174,7 +174,7 @@ def add_sprint_features(df):
 # 5) Career History (Advanced Stats)
 # ---------------------------------------------------------
 
-def add_driver_history(df):
+def add_driver_history(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(["year", "round"])
     df["grid"] = pd.to_numeric(df["grid"], errors="coerce")
     df["position"] = pd.to_numeric(df["position"], errors="coerce")
@@ -228,7 +228,7 @@ def add_driver_history(df):
 # 6) Encoding data
 # ---------------------------------------------------------
 
-def encode_data(df):
+def encode_data(df: pd.DataFrame) -> (pd.DataFrame, LabelEncoder, LabelEncoder, LabelEncoder):
     df_clean = df[df["status"].str.contains("Finished|Lap|Lapped", regex=True, na=False)].copy()
 
     le_driver = LabelEncoder()
@@ -260,7 +260,7 @@ def encode_data(df):
 # 7) Model training
 # ---------------------------------------------------------
 
-def train_models(df_train):
+def train_models(df_train: pd.DataFrame) -> (QualifRankerLGBM, RandomForestRegressor):
     # RandomForest hyperparameters
     params_qualif = {
         "objective": "lambdarank",
@@ -340,7 +340,7 @@ def train_models(df_train):
 # 8) Predictions
 # ---------------------------------------------------------
 
-def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_team, le_circuit, full_df, use_real_grid=False):
+def predict_race_outcome(models: (QualifRankerLGBM, RandomForestRegressor), drivers_df: pd.DataFrame, year: int, target_round: int, le_driver: LabelEncoder, le_team: LabelEncoder, le_circuit: LabelEncoder, full_df: pd.DataFrame, use_real_grid=False) -> pd.DataFrame:
     model_qualif, model_race = models
     simulation_results = []
 
@@ -580,7 +580,7 @@ def predict_race_outcome(models, drivers_df, year, target_round, le_driver, le_t
 # 9) MAIN FUNCTION
 # ---------------------------------------------------------
 
-def train_and_predict(df, target_year, target_round, gp_name, use_real_grid=False):
+def train_and_predict(df: pd.DataFrame, target_year: int, target_round: int, gp_name: str, use_real_grid=False) -> None:
     print(f"\n--- MACHINE LEARNING : {gp_name} ({target_year}) ---")
     
     df = df.copy()

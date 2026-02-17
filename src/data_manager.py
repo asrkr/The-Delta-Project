@@ -143,7 +143,7 @@ def ensure_keys(df: pd.DataFrame) -> pd.DataFrame:
 # ERGAST — FETCH
 # -------------------------------------------------------------------
 
-def _fetch_race_result(url):
+def _fetch_race_result(url: str) -> pd.DataFrame:
     for attempt in range(4):
         try:
             r = requests.get(url, timeout=10)
@@ -187,7 +187,7 @@ def _fetch_race_result(url):
             time.sleep(2)
     return None
 
-def fetch_qualifying_results(year, rnd):
+def fetch_qualifying_results(year: int, rnd: int) -> pd.DataFrame:
     """
     Retrieves real qualifying results (grid) from the Ergast API.
     """
@@ -231,7 +231,7 @@ def fetch_qualifying_results(year, rnd):
         print(f"Error qualifying fetch: {e}.")
         return None
 
-def load_real_qualifying(year, rnd):
+def load_real_qualifying(year: int, rnd: int) -> pd.DataFrame:
     if not os.path.exists(QUALI_CSV_PATH):
         return pd.DataFrame()
 
@@ -244,7 +244,7 @@ def load_real_qualifying(year, rnd):
     cols = [c for c in ["DriverKey", "DriverName", "TeamKey", "Team", "grid", "year", "round"] if c in quali.columns]
     return quali[cols]
 
-def fetch_sprint_results(year, rnd):
+def fetch_sprint_results(year: int, rnd: int) -> pd.DataFrame:
     """
     Retrieves Sprint results from Ergast API.
     Returns a DataFrame or None if no sprint occurred during the weekend
@@ -297,7 +297,7 @@ def fetch_sprint_results(year, rnd):
 # ERGAST — UPDATES (WITH INCREMENTAL LOGIC)
 # -------------------------------------------------------------------
 
-def update_database(start_year=2001, end_year=2025):
+def update_database(start_year=2001, end_year=2025) -> None:
     print(f"📌 Updating Ergast results {start_year}-{end_year}.")
     all_races = []
 
@@ -340,14 +340,14 @@ def update_database(start_year=2001, end_year=2025):
     df_final.to_csv(RESULTS_CSV_PATH, index=False)
     print(f"✔️ Saved → {RESULTS_CSV_PATH}.")
 
-def update_latest_qualifying(year, rnd):
+def update_latest_qualifying(year: int, rnd: int) -> bool:
     df = fetch_qualifying_results(year, rnd)
     if df is None:
         return False
     df.to_csv(QUALI_CSV_PATH, index=False)
     return True
 
-def update_sprint_data(start_year=2021, end_year=2025):
+def update_sprint_data(start_year=2021, end_year=2025) -> None:
     print(f"📌 Updating Sprint Results {start_year}-{end_year}")
 
     if start_year < 2021:
@@ -387,7 +387,7 @@ def update_sprint_data(start_year=2021, end_year=2025):
 # CALENDAR
 # -------------------------------------------------------------------
 
-def update_calendar(start_year=2001, end_year=2025):
+def update_calendar(start_year=2001, end_year=2025) -> None:
     print(f"📌 Updating calendar {start_year}-{end_year}.")
     data = []
 
@@ -415,7 +415,7 @@ def update_calendar(start_year=2001, end_year=2025):
 # FASTF1 — incrementally append to EXTRA CSV
 # -------------------------------------------------------------------
 
-def extract_fastf1_features(start_year, end_year):
+def extract_fastf1_features(start_year: int, end_year: int) -> None  :
     print(f"📌 FastF1 extraction (telemetry) {start_year}-{end_year}.")
     all_entries = []
 
@@ -590,7 +590,7 @@ def extract_fastf1_features(start_year, end_year):
 # LOAD + UTILS
 # -------------------------------------------------------------------
 
-def load_data():
+def load_data() -> pd.DataFrame:
     if not os.path.exists(RESULTS_CSV_PATH):
         print("File not found.")
         return None
@@ -629,14 +629,14 @@ def load_data():
     df = ensure_keys(df)
     return df
 
-def load_extra_features():
+def load_extra_features() -> pd.DataFrame:
     if not os.path.exists(EXTRA_CSV_PATH):
         return None
     extra = pd.read_csv(EXTRA_CSV_PATH)
     extra = ensure_keys(extra)
     return extra
 
-def get_rounds_for_race(race_name_keyword):
+def get_rounds_for_race(race_name_keyword: str) -> dict:
     if not os.path.exists(CALENDAR_CSV_PATH):
         print("Calendar not found.\nDownloading...")
         update_calendar()
@@ -650,7 +650,7 @@ def get_rounds_for_race(race_name_keyword):
 
     return dict(zip(filtered["year"], filtered["round"])), filtered.iloc[0]["raceName"]
 
-def get_race_participants(df, year, rnd):
+def get_race_participants(df: pd.DataFrame, year: int, rnd: int) -> pd.DataFrame:
     r = df[(df["year"] == year) & (df["round"] == rnd)].sort_values("grid")
     if not r.empty:
         cols = ["DriverKey", "Team", "TeamKey"]

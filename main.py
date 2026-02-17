@@ -1,7 +1,7 @@
 from src.data_manager import load_data, get_rounds_for_race
 from src.ml_model import train_and_predict
 
-def main():
+def main() -> None:
     df = load_data()
  
     if df is None:
