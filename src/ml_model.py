@@ -653,7 +653,7 @@ def train_and_predict(df: pd.DataFrame, target_year: int, target_round: int, gp_
     results = results.sort_values("Pos")
 
     print("\nSIMULATION RESULTS:")
-    print(results[["Pos", "DriverName", "Team", "Grid", "Delta"]].head(20).to_string(index=False))
+    print(results[["Pos", "DriverName", "Team", "Grid", "Delta"]].head(22).to_string(index=False))
 
 
 # ---------------------------------------------------------

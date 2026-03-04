@@ -659,6 +659,12 @@ def get_race_participants(df: pd.DataFrame, year: int, rnd: int) -> pd.DataFrame
         cols = [c for c in cols if c in r.columns]
         out = r[cols].drop_duplicates()
         return ensure_keys(out)
+    
+    entry_file = os.path.join(DATA_DIR, f"entry_list_{year}.csv")
+
+    if os.path.exists(entry_file):
+        entry_df = pd.read_csv(entry_file)
+        return ensure_keys(entry_df)
 
     return pd.DataFrame()
 
