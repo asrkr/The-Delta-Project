@@ -35,11 +35,13 @@ DRIVER_KEY_ALIASES = {
     "a_antonelli": "k_antonelli",
 }
 
+
 def canonicalize_driver_key(raw_key: str) -> str:
     if raw_key is None:
         return "unknown"
     s = str(raw_key).strip().lower()
     return DRIVER_KEY_ALIASES.get(s, s)
+
 
 def make_driver_key(given_name: str, family_name: str) -> str:
     """
@@ -62,6 +64,7 @@ def make_driver_key(given_name: str, family_name: str) -> str:
 
     driver_key = f"{g[0]}_{f}"
     return canonicalize_driver_key(driver_key)
+
 
 # -------------------------------------------------------------------
 # TEAM KEY CREATION
@@ -111,6 +114,7 @@ TEAM_KEY_ALIASES = {
     "haas": "haas",
 }
 
+
 def make_team_key(team_name: str) -> str:
     """
     Returns a stable TeamKey from a display name (Team).
@@ -122,6 +126,7 @@ def make_team_key(team_name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "_", s)
     s = re.sub(r"_+", "_", s).strip("_")
     return TEAM_KEY_ALIASES.get(s, s)
+
 
 def ensure_keys(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -138,6 +143,7 @@ def ensure_keys(df: pd.DataFrame) -> pd.DataFrame:
         out["TeamKey"] = out["TeamKey"].astype(str).apply(make_team_key)
 
     return out
+
 
 # -------------------------------------------------------------------
 # ERGAST — FETCH
@@ -187,6 +193,7 @@ def _fetch_race_result(url: str) -> pd.DataFrame:
             time.sleep(2)
     return None
 
+
 def fetch_qualifying_results(year: int, rnd: int) -> pd.DataFrame:
     """
     Retrieves real qualifying results (grid) from the Ergast API.
@@ -231,6 +238,7 @@ def fetch_qualifying_results(year: int, rnd: int) -> pd.DataFrame:
         print(f"Error qualifying fetch: {e}.")
         return None
 
+
 def load_real_qualifying(year: int, rnd: int) -> pd.DataFrame:
     if not os.path.exists(QUALI_CSV_PATH):
         return pd.DataFrame()
@@ -243,6 +251,7 @@ def load_real_qualifying(year: int, rnd: int) -> pd.DataFrame:
 
     cols = [c for c in ["DriverKey", "DriverName", "TeamKey", "Team", "grid", "year", "round"] if c in quali.columns]
     return quali[cols]
+
 
 def fetch_sprint_results(year: int, rnd: int) -> pd.DataFrame:
     """
