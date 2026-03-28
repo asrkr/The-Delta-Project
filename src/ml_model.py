@@ -61,15 +61,42 @@ def add_circuit_impact(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     try:
-        corr = finishers.groupby("circuitId")[["grid", "position"]].corr().iloc[0::2, -1]
-        # Reconstruction propre du dictionnaire
-        impact_map = {}
-        for idx, val in corr.items():
-            circuit_id = idx[0] # idx est un tuple (circuitId, 'grid')
-            impact_map[circuit_id] = val if not pd.isna(val) else 0.5
+        # Avoid data leakage: compute correlation using only historical data up to the PREVIOUS race
+        # Use `df` to get all races including future ones to predict
+        races = df[["year", "round", "circuitId"]].drop_duplicates()
+        importances = []
+
+        for _, race in races.iterrows():
+            y = race["year"]
+            r = race["round"]
+            cid = race["circuitId"]
             
-        df["circuit_importance"] = df["circuitId"].map(impact_map).fillna(0.5)
-    except:
+            # Historical data for THIS circuit BEFORE this race
+            past_data = finishers[
+                (finishers["circuitId"] == cid) &
+                ((finishers["year"] < y) | ((finishers["year"] == y) & (finishers["round"] < r)))
+            ]
+
+            # Require at least 10 historical finisher samples to compute correlation reliably
+            if len(past_data) >= 10:
+                c = past_data["grid"].corr(past_data["position"])
+                imp = float(c) if pd.notna(c) else 0.5
+            else:
+                imp = 0.5
+
+            importances.append({
+                "year": y,
+                "round": r,
+                "circuitId": cid,
+                "circuit_importance": imp
+            })
+
+        df_importances = pd.DataFrame(importances)
+
+        df = df.merge(df_importances, on=["year", "round", "circuitId"], how="left")
+        df["circuit_importance"] = df["circuit_importance"].fillna(0.5)
+    except Exception as e:
+        print(f"⚠️ Erreur lors du calcul de circuit_importance: {e}")
         df["circuit_importance"] = 0.5
 
     return df
