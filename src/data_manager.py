@@ -189,7 +189,7 @@ def _fetch_race_result(url: str) -> pd.DataFrame:
                 time.sleep((attempt + 1) * 5)
             else:
                 time.sleep(2)
-        except:
+        except Exception:
             time.sleep(2)
     return None
 
@@ -413,7 +413,7 @@ def update_calendar(start_year=2001, end_year=2025) -> None:
                     "circuitId": race["Circuit"]["circuitId"],
                     "date": race["date"]
                 })
-        except:
+        except Exception:
             pass
         time.sleep(0.5)
 
@@ -494,11 +494,8 @@ def extract_fastf1_features(start_year: int, end_year: int) -> None  :
                 if clean_times.empty:
                     clean_air_pace = np.nan
                 else:
-                    quantile_25 = int(len(clean_times) * 0.25)
-                    if quantile_25 < 1:
-                        clean_air_pace = clean_times.mean()
-                    else:
-                        clean_air_pace = clean_times.nsmallest(quantile_25).mean()
+                    quantile_25 = max(1, int(len(clean_times) * 0.25))
+                    clean_air_pace = clean_times.nsmallest(quantile_25).mean()
 
                 # GLOBAL PACE
                 all_times = drv_laps["LapTime"].dt.total_seconds().dropna()
@@ -686,5 +683,5 @@ def has_real_qualifying(year: int, rnd: int) -> bool:
             return False
         mask = (df_q["year"] == year) & (df_q["round"] == rnd)
         return not df_q[mask].empty
-    except:
+    except Exception:
         return False
