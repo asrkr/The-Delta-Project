@@ -348,19 +348,6 @@ def train_models(df_train: pd.DataFrame) -> (QualifRankerLGBM, RandomForestRegre
     model_race = RandomForestRegressor(**params_race)
     model_race.fit(df_train[features_race], df_train["position"])
 
-    
-    # Feature Importances - OPTIONAL, ONLY FOR IMPROVEMENTS/DEBUTS
-    """
-    qualif_importances = get_feature_importances(model_qualif, features_qualif)
-    race_importances = get_feature_importances(model_race, features_race)
-    
-    print("\n📊 Qualifying Model — Feature Importances")
-    print(qualif_importances.to_string(index=False))
-
-    print("\n🏁 Race Model — Feature Importances")
-    print(race_importances.to_string(index=False))
-    """
-
     return model_qualif, model_race
 
 # ---------------------------------------------------------
@@ -683,20 +670,3 @@ def train_and_predict(df: pd.DataFrame, target_year: int, target_round: int, gp_
     print(results[["Pos", "DriverName", "Team", "Grid", "Delta"]].head(22).to_string(index=False))
 
 
-# ---------------------------------------------------------
-# TOOLS FOR BENCHMARKS
-# ---------------------------------------------------------
-
-
-def get_feature_importances(model, feature_names):
-    """
-    Return a sorted DataFrame of a sklearn model's feature importances
-    """
-    return (
-        pd.DataFrame({
-            "feature": feature_names,
-            "importance": model.feature_importances_
-        })
-        .sort_values("importance", ascending=False)
-        .reset_index(drop=True)
-    )
