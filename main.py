@@ -10,8 +10,16 @@ def main() -> None:
 
     try:
         # --- USER INPUTS ---
-        nom_gp = input("Which Grand Prix do you want to predict? ")
-        annee_cible = int(input("Which season? "))
+        nom_gp = input("Which Grand Prix do you want to predict? ").strip()
+        if not nom_gp:
+            print("❌ Grand Prix name cannot be empty.")
+            return
+
+        try:
+            annee_cible = int(input("Which season? "))
+        except ValueError:
+            print("❌ Invalid season. Please enter a valid year (e.g. 2025).")
+            return
 
         choix_grille = input("Do you want to use the real starting grid (if available)? (y/n): ")
         use_real = choix_grille.strip().lower() == "y"
