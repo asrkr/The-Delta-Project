@@ -424,7 +424,7 @@ def update_calendar(start_year=2001, end_year=2025) -> None:
 # FASTF1 — incrementally append to EXTRA CSV
 # -------------------------------------------------------------------
 
-def extract_fastf1_features(start_year: int, end_year: int) -> None  :
+def extract_fastf1_features(start_year: int, end_year: int) -> None:
     print(f"📌 FastF1 extraction (telemetry) {start_year}-{end_year}.")
     all_entries = []
 

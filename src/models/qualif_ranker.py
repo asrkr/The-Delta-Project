@@ -3,27 +3,14 @@ import pandas as pd
 import lightgbm as lgb
 from sklearn.base import BaseEstimator, RegressorMixin
 
+from src.config import QUALIF_PARAMS
+
 class QualifRankerLGBM(BaseEstimator, RegressorMixin):
     def __init__(self, params=None):
-        # ✅ "eval_at" au lieu de "ndcg_eval_at" -> plus de warning
-        self.params = params if params else {
-            "objective": "lambdarank",
-            "metric": "ndcg",
-            "boosting_type": "gbdt",
-            "random_state": 42,
-            "n_jobs": -1,
-            "verbose": -1,
-            # best parameters with tuning
-            "n_estimators": 83,
-            "learning_rate": 0.010417146488237577,
-            "num_leaves": 60,
-            "max_depth": -1,
-            "min_child_samples": 26,
-            "subsample": 0.9962990060021659,
-            "colsample_bytree": 0.8896856637603093,
-            "reg_lambda": 2.679269781861703,
-            "reg_alpha": 0.7714673192056071
-        }
+        # Default hyperparameters live in src/config.QUALIF_PARAMS (single
+        # source of truth, shared with ml_model.train_models). Copy so callers
+        # can't mutate the shared dict.
+        self.params = params if params else dict(QUALIF_PARAMS)
         self.model = None
         self.feature_names = None
 
