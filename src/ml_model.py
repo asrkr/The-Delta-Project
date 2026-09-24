@@ -6,9 +6,14 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 from src.data_manager import get_race_participants, has_real_qualifying, load_real_qualifying, load_extra_features
 from src.models.qualif_ranker import QualifRankerLGBM
+from src.config import QUALIF_PARAMS, RACE_PARAMS, QUALIF_FEATURES, RACE_FEATURES
 
 
 warnings.filterwarnings("ignore", message="Mean of empty slice")
+
+# Default predicted grid slot used when a driver has no ranker output (e.g. a
+# rookie unseen in training). Mid-grid is the most neutral assumption.
+DEFAULT_PRED_GRID = 10
 
 # ---------------------------------------------------------
 # 1) Driver recent form (last 3 GPs)
@@ -129,7 +134,8 @@ def add_fastf1_features(df: pd.DataFrame) -> pd.DataFrame:
                     nums = [float(x) for x in v if x.strip()]
                     return np.mean(nums) if nums else np.nan
                 return float(val)
-            except: return np.nan
+            except Exception:
+                return np.nan
         extra["mean_pit_loss"] = extra["pit_losses"].apply(clean_pit)
 
     # Merge
@@ -288,64 +294,17 @@ def encode_data(df: pd.DataFrame) -> (pd.DataFrame, LabelEncoder, LabelEncoder, 
 # ---------------------------------------------------------
 
 def train_models(df_train: pd.DataFrame) -> (QualifRankerLGBM, RandomForestRegressor):
-    # RandomForest hyperparameters
-    params_qualif = {
-        "objective": "lambdarank",
-        "metric": "ndcg",
-        "boosting_type": "gbdt",
-        "random_state": 42,
-        "n_jobs": -1,
-        "verbose": -1,
-        # best parameters with tuning
-        "n_estimators": 83,
-        "learning_rate": 0.010417146488237577,
-        "num_leaves": 60,
-        "max_depth": -1,
-        "min_child_samples": 26,
-        "subsample": 0.9962990060021659,
-        "colsample_bytree": 0.8896856637603093,
-        "reg_lambda": 2.679269781861703,
-        "reg_alpha": 0.7714673192056071
-    }
-    params_race = {
-        "n_estimators": 320,
-        "max_depth": 13,
-        "min_samples_split": 13,
-        "min_samples_leaf": 5,
-        "max_features": None,
-        "bootstrap": True,
-        "random_state": 42,
-        "n_jobs": -1
-    }
+    # Hyperparameters + feature lists live in src/config (single source of truth).
+    # Qualifying "brain" (LightGBM Ranker)
+    features_qualif = [f for f in QUALIF_FEATURES if f in df_train.columns]
 
-    # Qualifying features
-    features_qualif = [
-        "team_id", "driver_id", "year", 
-        "form_grid", "circuit_importance", "circuit_id", 
-        "career_grid_avg", "circuit_grid_skill"
-    ]
-    # Filtering to keep only existing features
-    features_qualif = [f for f in features_qualif if f in df_train.columns]
-    
-    model_qualif = QualifRankerLGBM(params=params_qualif)
+    model_qualif = QualifRankerLGBM(params=dict(QUALIF_PARAMS))
     model_qualif.fit(df_train, features_qualif, target_col="grid")
 
-    # Race features
-    features_race = [
-        "grid",
-        "form_race",
-        "career_race_avg",
-        "pace_rank_season",
-        "team_id", "driver_id", "year", 
-        "circuit_importance", "circuit_id",
-        "circuit_race_skill",
-        "career_race_pace", "career_clean_air_pace", "career_best_lap", "career_pit_loss", "career_wet_skill",
-        "has_sprint", "sprint_delta",
-        "is_rainy", "track_temp"
-    ]
-    features_race = [f for f in features_race if f in df_train.columns]
+    # Race "brain" (RandomForest)
+    features_race = [f for f in RACE_FEATURES if f in df_train.columns]
 
-    model_race = RandomForestRegressor(**params_race)
+    model_race = RandomForestRegressor(**RACE_PARAMS)
     model_race.fit(df_train[features_race], df_train["position"])
 
     return model_qualif, model_race
@@ -511,10 +470,16 @@ def predict_race_outcome(models: (QualifRankerLGBM, RandomForestRegressor), driv
                 pred_grid_map[drv] = i
 
     # -----------------------------
-    # 4) Race prediction loop
+    # 4) Race prediction (batched)
     # -----------------------------
     # Use model expected feature names if available (sklearn)
     race_expected = getattr(model_race, "feature_names_in_", None)
+
+    # Build one feature row per driver, then predict the whole field in a single
+    # model_race.predict() call. This is numerically identical to predicting each
+    # driver individually, but avoids ~20 separate predict() round-trips per race.
+    race_rows = []          # feature dicts fed to the model
+    race_meta = []          # output metadata aligned with race_rows
 
     for _, row in drivers_df.iterrows():
         driver = row.get("DriverKey")
@@ -536,7 +501,7 @@ def predict_race_outcome(models: (QualifRankerLGBM, RandomForestRegressor), driv
         t_id = safe_le_transform(le_team, team_for_encoding, default=-1)
 
         # grid choice: AI by default, real if requested + available
-        ai_grid_pos = pred_grid_map.get(driver, 10)
+        ai_grid_pos = pred_grid_map.get(driver, DEFAULT_PRED_GRID)
         grid_input = ai_grid_pos
         if use_real_grid and "grid" in row and pd.notna(row["grid"]) and row["grid"] > 0:
             grid_input = float(row["grid"])
@@ -546,7 +511,7 @@ def predict_race_outcome(models: (QualifRankerLGBM, RandomForestRegressor), driv
         is_rainy_val = int(row.get("is_rainy", 0)) if pd.notna(row.get("is_rainy", 0)) else 0
         track_temp_val = float(row.get("track_temp", default_track_temp)) if pd.notna(row.get("track_temp", default_track_temp)) else float(default_track_temp)
 
-        X_r = pd.DataFrame([{
+        race_rows.append({
             "grid": grid_input,
             "form_race": stats["form_race"],
             "career_race_avg": stats["career_race_avg"],
@@ -566,27 +531,34 @@ def predict_race_outcome(models: (QualifRankerLGBM, RandomForestRegressor), driv
             "sprint_delta": s_delta,
             "is_rainy": is_rainy_val,
             "track_temp": track_temp_val,
-        }])
-
-        # ensure we feed exactly what the model expects
-        if race_expected is not None:
-            cols = [c for c in race_expected if c in X_r.columns]
-            X_use = X_r[cols]
-        else:
-            X_use = X_r
-
-        try:
-            pred_race = float(model_race.predict(X_use)[0])
-        except Exception:
-            continue
-
-        simulation_results.append({
+        })
+        race_meta.append({
             "DriverKey": driver,
             "DriverName": nice_name,
             "Team": team_display,
-            "Course_Score": pred_race,
-            "Grid_Input": grid_input
+            "Grid_Input": grid_input,
         })
+
+    if not race_rows:
+        return pd.DataFrame()
+
+    X_r = pd.DataFrame(race_rows)
+
+    # ensure we feed exactly what the model expects
+    if race_expected is not None:
+        cols = [c for c in race_expected if c in X_r.columns]
+        X_use = X_r[cols]
+    else:
+        X_use = X_r
+
+    try:
+        preds = model_race.predict(X_use)
+    except Exception as e:
+        print(f"⚠️ Erreur prédiction course: {e}")
+        return pd.DataFrame()
+
+    for meta, score in zip(race_meta, preds):
+        simulation_results.append({**meta, "Course_Score": float(score)})
 
     return pd.DataFrame(simulation_results)
 
@@ -594,7 +566,7 @@ def predict_race_outcome(models: (QualifRankerLGBM, RandomForestRegressor), driv
 # 9) MAIN FUNCTION
 # ---------------------------------------------------------
 
-def train_and_predict(df: pd.DataFrame, target_year: int, target_round: int, gp_name: str, use_real_grid=False) -> None:
+def train_and_predict(df: pd.DataFrame, target_year: int, target_round: int, gp_name: str, use_real_grid=False) -> pd.DataFrame:
     print(f"\n--- MACHINE LEARNING : {gp_name} ({target_year}) ---")
     
     df = df.copy()
@@ -668,5 +640,8 @@ def train_and_predict(df: pd.DataFrame, target_year: int, target_round: int, gp_
 
     print("\nSIMULATION RESULTS:")
     print(results[["Pos", "DriverName", "Team", "Grid", "Delta"]].head(22).to_string(index=False))
+
+    # Return the ranked results so callers (e.g. the GUI) can reuse them.
+    return results
 
 
