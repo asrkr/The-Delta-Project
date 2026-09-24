@@ -1,16 +1,17 @@
 # 🏎️ The Delta Project
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat&logo=python)
-![Machine Learning](https://img.shields.io/badge/Model-RandomForest-purple?style=flat&logo=scikit-learn)
-![Status](https://img.shields.io/badge/Status-V1.8_Context_%26_Weather-green)
+![Machine Learning](https://img.shields.io/badge/Model-Dual_Brain_LGBM_RF-purple?style=flat&logo=scikit-learn)
+![Status](https://img.shields.io/badge/Status-V1.9_Interactive_Dashboard-green)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 **The Delta Project** is an Artificial Intelligence engine designed to predict Formula 1 race results.
 
-The project leverages historical data (from 2001) and Machine Learning (**Random Forest**) to simulate a full race weekend: from qualifying to the chequered flag.
+The project leverages historical data (from 2001) and Machine Learning (**Dual Brain: LightGBM Ranker + RandomForest**) to simulate a full race weekend: from qualifying to the chequered flag.
 
-> **V1.8** extends the V1.7.1 stability work by introducing **clean-air pace** and **weather/temperature race context**
-> while keeping **strict temporal integrity** across training, internal benchmarking tools, and hyperparameter tuning.
+> **V1.9** extends the V1.8 Context & Weather release with an **interactive Streamlit dashboard**,
+> a **centralized model configuration** (`src/config.py`) and **batched race predictions**,
+> plus a **Windows encoding fix** for reliable CLI output.
 
 ---
 
@@ -126,10 +127,14 @@ The AI’s predictions should be interpreted as:
 
 - **Language:** Python 3.13+
 - **Data:** Pandas, NumPy
-- **Machine Learning:** scikit-learn (`RandomForestRegressor`, `LabelEncoder`)
+- **Machine Learning:**
+  - `scikit-learn` (`RandomForestRegressor`, `LabelEncoder`) — race model
+  - `lightgbm` (`LGBMRanker`) — qualifying model (Learning-to-Rank)
 - **Data Collection:**
   - `requests` (REST API Jolpica/Ergast)
   - `fastf1` (timing & telemetry)
+- **Interface:** `streamlit` (F1-themed dashboard `app.py`)
+- **Dev tooling:** `optuna` (walk-forward hyperparameter tuning, internal)
 
 ---
 
@@ -139,11 +144,16 @@ The AI’s predictions should be interpreted as:
 The-Delta-Project/
 │
 ├── src/                          # Core source code
+│   ├── config.py                 # Central hyperparams & feature lists (single source of truth)
 │   ├── data_manager.py           # ETL Pipeline (Ergast + FastF1 + calendar + sprints)
-│   └── ml_model.py               # Feature engineering & ML models (qualif + race)
+│   ├── ml_model.py               # Feature engineering & ML models (qualif + race)
+│   └── models/
+│       └── qualif_ranker.py      # LightGBM Ranker wrapper (qualifying brain)
 │
-├── main.py                       # Main entry point (single race prediction)
+├── app.py                        # Streamlit dashboard (Prediction / Data / Dev tabs)
+├── main.py                       # CLI entry point (single race prediction)
 ├── update_manager.py             # Maintenance script (update/refresh datasets)
+├── requirements.txt              # Pinned runtime + GUI + dev dependencies
 │
 └── README.md                     # You are here
 ````
@@ -155,8 +165,12 @@ The-Delta-Project/
 ### 1. Clone & Install Dependencies
 
 ```bash
-pip install pandas numpy scikit-learn requests fastf1
+pip install -r requirements.txt
 ```
+
+This installs the full stack: `pandas`, `numpy`, `scikit-learn`, **`lightgbm`**
+(qualifying ranker), `requests`, `fastf1`, `streamlit` (GUI) and `optuna`
+(developer tooling).
 
 ---
 
@@ -184,11 +198,27 @@ This generates:
 
 ---
 
-### 3. Run a Single-Race Prediction
+### 3. Run a Single-Race Prediction (CLI)
 
 ```bash
 python main.py
 ```
+
+---
+
+### 3-bis. Launch the Graphical Interface (recommended)
+
+An F1-themed **Streamlit dashboard** (`app.py`) exposes the whole engine in three tabs:
+
+- **🔮 Prédiction** — predict a Grand Prix in Oracle (predicted grid) or Analyst (real grid) mode, with a styled podium and results table.
+- **🔄 Données** — refresh the datasets (Ergast results, calendar, FastF1 telemetry, sprints, latest qualifying) with live logs.
+- **🛠️ Mode Dev** — full-season walk-forward backtest with accuracy metrics (Winner / Top 3 / Top 5 / Top 10 / MAE).
+
+```bash
+streamlit run app.py
+```
+
+The app opens in your browser (default: http://localhost:8501).
 
 ---
 
@@ -201,7 +231,16 @@ Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 
 ## 🗺️ Roadmap
 
-**Current status: V1.8 – Context & Weather Release.**
+**Current status: V1.9 – Interactive Dashboard.**
+
+### ✅ Phase 4.5: Interactive Dashboard & Hardening (V1.9)
+
+* [x] Streamlit dashboard (`app.py`) — Prediction / Data / Dev with F1 theming
+* [x] Centralized model config (`src/config.py`) — single source for hyperparams & feature lists
+* [x] Batched race prediction — single `predict()` call for the whole grid (faster, same accuracy)
+* [x] Windows UTF-8 fix — `stdout/stderr` forced to UTF-8 to prevent emoji crash (`main.py`)
+* [x] Dependency pinning — `requirements.txt` with `lightgbm`, `streamlit`, `optuna`
+* [x] Return value on `train_and_predict()` for GUI / programmatic reuse
 
 ### ✅ Phase 4: Context & Robustness (V1.8)
 
@@ -229,14 +268,14 @@ Sprint-aware benchmarks can be run using dedicated internal benchmark scripts.
 
 ### 🚀 Phase 5: Next-Gen Models (V2.x)
 
-* Learning-to-Rank for qualifying
-* Gradient Boosting (LightGBM / CatBoost)
+* ~~Learning-to-Rank for qualifying~~ → **done (LightGBM Ranker, V1.9 via `src/config.py`)**
+* Gradient Boosting refinements (CatBoost / extra tuning)
 * Probabilistic race outcome distributions
 * Explicit separation between pace, position, and variance modelling
 
 ---
 
-## 📊 Current Performance (Reference Season – 2025, V1.8)
+## 📊 Current Performance (Reference Season – 2025, V1.8 — unchanged in V1.9)
 
 | Metric      | 🔮 Oracle Mode | 🔬 Analyst Mode |
 | ----------- | -------------- | --------------- |
