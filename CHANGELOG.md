@@ -6,6 +6,53 @@ The project follows a versioned, iterative development approach focused on model
 
 ---
 
+## [v1.9.0] – Interactive Dashboard  
+**Release date:** 2026-09-24
+
+### ✨ Added
+- **Streamlit dashboard (`app.py`, 487 lignes)** — interface F1-themed en 3 onglets :
+  - **🔮 Prédiction** — Oracle (grille prédite) vs Analyst (grille réelle), podium stylé + table des résultats.
+  - **🔄 Données** — refresh incrémental Ergast / calendrier / FastF1 / sprints / dernière qualif avec logs live.
+  - **🛠️ Mode Dev** — backtest walk-forward saison complète (Winner / Top 3 / Top 5 / Top 10 / MAE) via `dev_tools/simulateur_saison`.
+- **`src/config.py` (single source of truth)** :
+  - Centralise `QUALIF_PARAMS` (LightGBM Ranker, tuned Optuna), `RACE_PARAMS` (RandomForest) et `QUALIF_FEATURES` / `RACE_FEATURES`.
+  - Supprime la duplication entre `ml_model.train_models` et `QualifRankerLGBM.__init__`.
+- **`requirements.txt`** — dépendances pinnées : `pandas`, `numpy`, `scikit-learn`, `lightgbm`, `requests`, `fastf1`, `streamlit`, `optuna`.
+- **`train_and_predict()` retourne désormais `pd.DataFrame`** des résultats classés (réutilisable par la GUI), en plus de l'affichage CLI.
+
+### 🔄 Changed
+- **`src/ml_model.py` refactor** :
+  - `train_models()` lit hyperparams & feature lists depuis `src/config.py` (copy via `dict()` pour éviter la mutation).
+  - `predict_race_outcome()` passe d'une boucle `predict()` par pilote à une **prédiction batchée** (une seule matrice `X_r` → un seul `model_race.predict()`), numériquement identique mais plus rapide.
+  - `DEFAULT_PRED_GRID = 10` extrait en constante (cas rookies sans sortie du ranker).
+  - `except:` nu → `except Exception:` + log `⚠️ Erreur prédiction course` et `return pd.DataFrame()` sur échec global.
+- **`src/models/qualif_ranker.py`** importe `QUALIF_PARAMS` depuis `src/config.py` (défauts copiés, plus de duplication inline).
+- **`README.md`** : badge `V1.9`, tech stack `lightgbm`/`streamlit`/`optuna`, arborescence à jour, roadmap Phase 4.5, section GUI `3-bis`.
+- **`.gitignore`** : ajout `.streamlit/` (cache local Streamlit).
+
+### 🐞 Fixed
+- `src/data_manager.py:427` — `def extract_fastf1_features(...) -> None  :` → `-> None:` (double espace supprimé, lint).
+
+### ✅ Validated
+- Parité numérique vérifiée : prédiction batchée vs boucle pilote-par-pilote identique.
+- Aucune fuite temporelle introduite (features toujours past-only).
+- GUI testée : prédiction Oracle/Analyst, refresh données, backtest dev avec callback de progression.
+
+### ⚠️ Design Notes
+- La GUI réutilise le moteur existant sans modifier la logique métier ; `dev_tools/` reste non packagé (outil interne).
+- Performances V1.8 inchangées (modèles identiques, seuls l'orchestration et l'UX évoluent).
+
+---
+
+## [v1.8.1] – Windows Encoding Fix  
+**Release date:** 2026-09-24
+
+### 🐞 Fixed
+- **Crash emoji sur Windows (`main.py`)** — `UnicodeEncodeError` sur consoles `cp1252` lors de l'affichage `🏁`/`⚠️` avant toute prédiction.
+  - Reconfiguration `sys.stdout`/`sys.stderr` en UTF-8 au démarrage via `reconfigure(encoding="utf-8")`, encapsulée en `try/except` (no-op si indisponible).
+
+---
+
 ## [v1.8.0] – Clean Air & Weather Context  
 **Release date:** 2026
 
@@ -197,6 +244,6 @@ The project follows a versioned, iterative development approach focused on model
 ## 🔮 Next Version
 
 **v2.0 – Probabilistic & Ranking Models**
-- Qualifying as Learning-to-Rank.
-- Gradient Boosting (LightGBM / CatBoost).
+- ~~Qualifying as Learning-to-Rank~~ → done in v1.9 (LightGBM Ranker).
+- Gradient Boosting refinements (CatBoost, deeper Optuna search).
 - Probabilistic race outcome distributions.

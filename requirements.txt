@@ -1,0 +1,20 @@
+# The Delta Project — runtime dependencies
+# Pinned to >= the versions this project was developed against.
+
+# Core data stack
+pandas>=2.3
+numpy>=2.2
+
+# Machine learning
+scikit-learn>=1.6     # RandomForest race model
+lightgbm>=4.6         # LightGBM Ranker qualifying model
+
+# Data collection
+requests>=2.32        # Jolpica / Ergast REST API
+fastf1>=3.8           # timing & telemetry
+
+# Graphical interface
+streamlit>=1.40       # F1-themed dashboard (app.py)
+
+# Developer tools only (backtesting / hyperparameter tuning in dev_tools/)
+optuna>=4.6
