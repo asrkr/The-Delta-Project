@@ -1,5 +1,16 @@
+import sys
+
 from src.data_manager import load_data, get_rounds_for_race
 from src.ml_model import train_and_predict
+
+# Ensure emoji/UTF-8 output works on consoles with a legacy default encoding
+# (e.g. Windows cp1252), which would otherwise raise UnicodeEncodeError.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
 
 def main() -> None:
     df = load_data()
