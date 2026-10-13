@@ -6,7 +6,7 @@ import numpy as np
 from the_delta_project.utils.keys import make_driver_key, make_team_key
 
 
-def _fetch_race_result(url: str) -> pd.DataFrame | str | None:
+def fetch_race_result(url: str) -> pd.DataFrame | str | None:
     """Fetch race results for a single round from Ergast/Jolpica API.
     Returns:
         - pd.DataFrame if results exist

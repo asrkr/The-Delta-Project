@@ -1,9 +1,9 @@
-from the_delta_project.data.ergast import _fetch_race_result
+from the_delta_project.data.ergast import fetch_race_result
 
 
 def test_fetch_data_result_real_api():
     url = "https://api.jolpi.ca/ergast/f1/2024/results.json"
-    df = _fetch_race_result(url)
+    df = fetch_race_result(url)
 
     assert df is not None
     assert not isinstance(df, str)
