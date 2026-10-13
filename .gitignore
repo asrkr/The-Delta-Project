@@ -1,0 +1,24 @@
+# Python-generated files
+build/
+dist/
+wheels/
+
+# Environments and dependencies
+.venv
+__pycache__/
+*.py[cod]
+
+# Data and cache (FastF1, Streamlit)
+data/*.csv
+data/fastf1_cache/
+.streamlit/
+
+# Distribution and build
+dist/
+*egg-info/
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+EOF
