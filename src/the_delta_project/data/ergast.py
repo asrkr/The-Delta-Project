@@ -1,0 +1,54 @@
+import time
+import pandas as pd
+import requests
+import numpy as np
+
+from the_delta_project.utils.keys import make_driver_key, make_team_key
+
+
+def _fetch_race_result(url: str) -> pd.DataFrame | str | None:
+    """Fetch race results for a single round from Ergast/Jolpica API.
+    Returns:
+        - pd.DataFrame if results exist
+        - 'END_OF_SEASON' if no race exists for this round
+        - None if fetching failed after retries
+    """
+    for attempt in range(4):
+        try:
+            r = requests.get(url, timeout=10)
+
+            if r.status_code == 200:
+                data = r.json()
+                races = data["MRData"]["RaceTable"]["Races"]
+                if not races:
+                    return "END_OF_SEASON"
+
+                circuit_id = races[0].get("Circuit", {}).get("circuitId", "unknown")
+
+                df = pd.DataFrame(races[0]["Results"])
+
+                df["DriverKey"] = df["Driver"].apply(
+                    lambda x: make_driver_key(x.get("givenName", ""), x.get("familyName", ""))
+                )
+                df["DriverName"] = df["Driver"].apply(
+                    lambda x: f"{x.get('givenName', '')} {x.get('familyName', '')}".strip()
+                )
+
+                df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
+                df["TeamKey"] = df["Team"].apply(make_team_key)
+
+                df["circuitId"] = circuit_id
+                df["grid"] = pd.to_numeric(df.get("grid", np.nan), errors="coerce")
+                df["position"] = pd.to_numeric(df.get("position", np.nan), errors="coerce")
+
+                cols = ["DriverKey", "DriverName", "TeamKey", "Team", "grid", "position", "status", "points", "circuitId"]
+                final_cols = [c for c in cols if c in df.columns]
+                return df[final_cols]
+            
+            elif r.status_code == 429:
+                time.sleep((attempt + 1) * 5)
+            else:
+                time.sleep(2)
+        except Exception as e:
+            time.sleep(2)
+    return None
