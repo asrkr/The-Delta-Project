@@ -12,6 +12,7 @@ __pycache__/
 data/*.csv
 data/fastf1_cache/
 .streamlit/
+.pytest_cache/
 
 # Distribution and build
 dist/
