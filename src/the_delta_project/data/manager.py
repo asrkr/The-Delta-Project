@@ -157,3 +157,16 @@ def get_rounds_for_race(race_name_keyword: str) -> tuple[dict[int, int], str | N
     rounds_map = dict(zip(filtered["year"], filtered["round"]))
     official_name = filtered.iloc[0]["raceName"]
     return rounds_map, official_name
+
+
+def get_race_participants(df: pd.DataFrame, year: int, rnd: int) -> pd.DataFrame:
+    """Get the participant list for a specific race round."""
+    r = df[(df["year"] == year) & (df["round"] == rnd)].sort_values("grid")
+    if not r.empty:
+        cols = ["DriveKey", "DriverName", "Team", "TeamKey"]
+        if "grid" in r.columns:
+            cols.append("grid")
+        cols = [c for c in cols if c in r.columns]
+        out = r[cols].drop_duplicates(subset=["DriverKey"])
+        return ensure_keys(out)
+    return pd.DataFrame()
