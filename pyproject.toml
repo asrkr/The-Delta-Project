@@ -4,17 +4,12 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "Ayan Sarkar", email = "prenom.nom@edu.esiee.fr" }
+    { name = "Ayan Sarkar", email = "a.sarkar@outlook.fr" }
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "fastf1>=3.8.3",
-    "lightgbm>=4.7.0",
-    "optuna>=5.0.0",
     "pandas>=2.3.3",
     "requests>=2.34.2",
-    "scikit-learn>=1.9.1",
-    "streamlit>=1.65.0",
 ]
 
 [project.scripts]
