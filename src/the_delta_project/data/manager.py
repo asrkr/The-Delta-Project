@@ -2,12 +2,20 @@ import os
 import pandas as pd
 
 from the_delta_project.data.ergast import fetch_race_result
+from the_delta_project.data.calendar import fetch_calendar
 
+# -------------------------------------------------------------------
 # Absolute paths based on project root
+# -------------------------------------------------------------------
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../dat"))
+
 RACE_RESULTS_CSV_PATH = os.path.join(DATA_DIR, "race_results.csv")
+CALENDAR_CSV_PATH = os.path.join(DATA_DIR, "races_calendar.csv")
 
 
+# -------------------------------------------------------------------
+# UPDATES (INCREMENTAL LOGIC)
+# -------------------------------------------------------------------
 def update_database(start_year: int = 2001, end_year: int = 2026) -> None:
     """Download race results from Ergast/Jolpica and save them incrementally to CSV."""
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -42,3 +50,10 @@ def update_database(start_year: int = 2001, end_year: int = 2026) -> None:
 
     df_final = df_final.sort_values(["year", "round", "grid"])
     df_final.to_csv(RACE_RESULTS_CSV_PATH, index=False)
+
+
+def update_calendar(start_year: int = 2001, end_year: int = 2026) -> None:
+    """Fetch calendar from Ergast API and save to CSV."""
+    df = fetch_calendar(start_year, end_year)
+    if not df.empty:
+        df.to_csv(CALENDAR_CSV_PATH, index=False)
