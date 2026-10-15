@@ -2,7 +2,7 @@ import os
 import time
 import pandas as pd
 
-from the_delta_project.data.ergast import fetch_race_result
+from the_delta_project.data.ergast import fetch_race_result, fetch_qualifying_results
 from the_delta_project.data.calendar import fetch_calendar
 from the_delta_project.data.sprint import fetch_sprint_results
 
@@ -14,6 +14,7 @@ DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../dat
 RACE_RESULTS_CSV_PATH = os.path.join(DATA_DIR, "race_results.csv")
 CALENDAR_CSV_PATH = os.path.join(DATA_DIR, "races_calendar.csv")
 SPRINT_RESULTS_CSV_PATH = os.path.join(DATA_DIR, "sprint_results.csv")
+QUALI_RESULTS_CSV_PATH = os.path.join(DATA_DIR, "latest_qualifying.csv")
 
 
 # -------------------------------------------------------------------
@@ -91,3 +92,12 @@ def update_sprint_dat(start_year: int = 2021, end_year: int = 2026) -> None:
 
     df_final = df_final.sort_values(["year", "round", "sprint_pos"])
     df_final.to_csv(SPRINT_RESULTS_CSV_PATH, index=False)
+
+
+def update_latest_qualifying(year: int, rnd: int) -> bool:
+    """Fetch latest qualifying results for a single race"""
+    df = fetch_qualifying_results(year, rnd)
+    if df is None or df.empty:
+        return True
+    df.to_csv(QUALI_RESULTS_CSV_PATH, index=False)
+    return True
