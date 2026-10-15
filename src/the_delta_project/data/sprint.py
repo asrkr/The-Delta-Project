@@ -7,6 +7,10 @@ from the_delta_project.utils.keys import make_driver_key, make_team_key
 
 
 def fetch_sprint_results(year: int, rnd: int) -> pd.DataFrame | None:
+    """Fetch sprint race results from Ergast API
+    Sprint races were introduced in 2021. Returns None if year < 2021
+    or if no sprint took place during the given race weekend.
+    """
     if year < 2021:
         return None
 
