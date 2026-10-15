@@ -1,10 +1,12 @@
 import os
 import time
+import numpy as np
 import pandas as pd
 
 from the_delta_project.data.ergast import fetch_race_result, fetch_qualifying_results
 from the_delta_project.data.calendar import fetch_calendar
 from the_delta_project.data.sprint import fetch_sprint_results
+from the_delta_project.utils.keys import ensure_keys
 
 # -------------------------------------------------------------------
 # Absolute paths based on project root
@@ -101,3 +103,38 @@ def update_latest_qualifying(year: int, rnd: int) -> bool:
         return True
     df.to_csv(QUALI_RESULTS_CSV_PATH, index=False)
     return True
+
+
+# -------------------------------------------------------------------
+# LOAD + UTILS
+# -------------------------------------------------------------------
+def load_data() -> pd.DataFrame | None:
+    """Load race results dataset and merge calendar (circuitId) and sprint features."""
+    if not os.path.exists(RACE_RESULTS_CSV_PATH):
+        return None
+
+    df = pd.read_csv(RACE_RESULTS_CSV_PATH)
+    df = ensure_keys(df)
+
+    # Merge circuitId via calendar
+    if os.path.exists(CALENDAR_CSV_PATH):
+        cal = pd.read_csv(CALENDAR_CSV_PATH)
+        if "circuitId" not in df.columns:
+            df = df.merge(cal[["year", "round", "circuitId"]], on=["year", "round"])
+
+    # Merge sprint features
+    sprint_cols = ["sprint_pos", "sprint_grid", "sprint_points"]
+    if os.path.exists(SPRINT_RESULTS_CSV_PATH):
+        try:
+            df_sprint = pd.read_csv(SPRINT_RESULTS_CSV_PATH)
+            df_sprint = ensure_keys(df_sprint)
+            cols_to_merge = ["year", "round", "DriverKey"] + [c for c in sprint_cols if c in df_sprint.columns]
+            df = df.merge(df_sprint[cols_to_merge], on=["year", "round", "DriverKey"], how="left")
+        except Exception:
+            for c in sprint_cols:
+                df[c] = np.nan
+    else:
+        for c in sprint_cols:
+            df[c] = np.nan
+
+    return ensure_keys(df)
