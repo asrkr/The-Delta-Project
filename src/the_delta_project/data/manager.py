@@ -138,3 +138,22 @@ def load_data() -> pd.DataFrame | None:
             df[c] = np.nan
 
     return ensure_keys(df)
+
+
+def get_rounds_for_race(race_name_keyword: str) -> tuple[dict[int, int], str | None]:
+    """Return a mapping of {year: round} and the official race name for a keyword"""
+    if not os.path.exists(CALENDAR_CSV_PATH):
+        update_calendar()
+
+    if not os.path.exists(CALENDAR_CSV_PATH):
+        return {}, None
+
+    df = pd.read_csv(CALENDAR_CSV_PATH)
+    filtered = df[df["RaceName"].str.contains(race_name_keyword, case=False, na=False)]
+
+    if filtered.empty:
+        return {}, None
+
+    rounds_map = dict(zip(filtered["year"], filtered["round"]))
+    official_name = filtered.iloc[0]["raceName"]
+    return rounds_map, official_name
