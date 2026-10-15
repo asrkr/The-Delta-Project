@@ -38,8 +38,8 @@ def fetch_sprint_results(year: int, rnd: int) -> pd.DataFrame | None:
         df["Team"] = df["Constructor"].apply(lambda x: x.get("name", ""))
         df["TeamKey"] = df["Team"].apply(make_team_key)
 
-        df["sprint_pos"] = pd.to_numeric(df["position"], errors="coerce")
-        df["sprint_grid"] = pd.to_numeric(df["grid"], errors="coerce")
+        df["sprint_pos"] = pd.to_numeric(df.get("position", np.nan), errors="coerce")
+        df["sprint_grid"] = pd.to_numeric(df.get("grid", np.nan), errors="coerce")
         df["sprint_points"] = pd.to_numeric(df["points"], errors="coerce")
 
         df["year"] = int(year)
