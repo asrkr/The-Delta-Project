@@ -9,7 +9,7 @@ __pycache__/
 *.py[cod]
 
 # Data and cache (FastF1, Streamlit)
-data/*.csv
+data/
 data/fastf1_cache/
 .streamlit/
 .pytest_cache/
