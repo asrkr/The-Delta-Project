@@ -24,7 +24,6 @@ def fetch_race_result(url: str) -> pd.DataFrame | str | None:
                     return "END_OF_SEASON"
 
                 circuit_id = races[0].get("Circuit", {}).get("circuitId", "unknown")
-
                 df = pd.DataFrame(races[0]["Results"])
 
                 df["DriverKey"] = df["Driver"].apply(
@@ -91,7 +90,9 @@ def fetch_qualifying_results(year: int, rnd: int) -> pd.DataFrame | None:
         df["year"] = int(year)
         df["round"] = int(rnd)
 
-        return df[["DriverKey", "DriverName", "TeamKey", "Team", "grid", "year", "round"]]
+        cols = ["DriverKey", "DriverName", "TeamKey", "Team", "grid", "year", "round"]
+        final_cols =[c for c in cols if c in df.columns]
+        return df[final_cols]
 
     except Exception:
         return None
