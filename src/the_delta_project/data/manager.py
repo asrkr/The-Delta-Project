@@ -11,7 +11,8 @@ from the_delta_project.utils.keys import ensure_keys
 # -------------------------------------------------------------------
 # Absolute paths based on project root
 # -------------------------------------------------------------------
-DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../dat"))
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.abspath(os.path.join(CURRENT_DIR, "../../../data"))
 
 RACE_RESULTS_CSV_PATH = os.path.join(DATA_DIR, "race_results.csv")
 CALENDAR_CSV_PATH = os.path.join(DATA_DIR, "races_calendar.csv")
@@ -62,6 +63,7 @@ def update_race_data(start_year: int = 2001, end_year: int = 2026) -> None:
 
 def update_calendar(start_year: int = 2001, end_year: int = 2026) -> None:
     """Fetch calendar from Ergast API and save to CSV."""
+    os.makedirs(DATA_DIR, exist_ok=True)
     df = fetch_calendar(start_year, end_year)
     if not df.empty:
         df.to_csv(CALENDAR_CSV_PATH, index=False)
@@ -69,6 +71,7 @@ def update_calendar(start_year: int = 2001, end_year: int = 2026) -> None:
 
 def update_sprint_dat(start_year: int = 2021, end_year: int = 2026) -> None:
     """Fetch sprint results and update CSV incrementally"""
+    os.makedirs(DATA_DIR, exist_ok=True)
     if start_year < 2021:
         start_year = 2021
 
@@ -98,6 +101,7 @@ def update_sprint_dat(start_year: int = 2021, end_year: int = 2026) -> None:
 
 def update_latest_qualifying(year: int, rnd: int) -> bool:
     """Fetch latest qualifying results for a single race"""
+    os.makedirs(DATA_DIR, exist_ok=True)
     df = fetch_qualifying_results(year, rnd)
     if df is None or df.empty:
         return True
