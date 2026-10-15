@@ -1,5 +1,6 @@
 import re
 import unicodedata
+import pandas as pd
 
 
 # Alias mapping for driver keys across different data sources
@@ -91,3 +92,17 @@ def make_team_key(team_name: str) -> str:
     if not clean_team:
         return "unknown"
     return TEAM_KEY_ALIASES.get(clean_team, clean_team)
+
+
+def ensure_keys(df: pd.DataFrame) -> pd.DataFrame:
+    """Backfill DriverKey and TeamKey on any DataFrame"""
+    out = df.copy()
+    if "DriverKey" in out.columns:
+        out["DriverKey"] = out["DriverKey"].astype(str).apply(canonicalize_driver_key)
+
+    if "TeamKey" not in out.columns and "Team" in out.columns:
+        out["TeamKey"] = out["Team"].apply(make_team_key)
+    elif "TeamKey" in out.columns:
+        out["TeamKey"] = out["TeamKey"].astype(str).apply(make_team_key)
+
+    return out
