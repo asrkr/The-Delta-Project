@@ -1,6 +1,10 @@
-import os
 import pandas as pd
-from the_delta_project.data.manager import get_rounds_for_race, get_race_participants, update_calendar
+
+from the_delta_project.data.manager import (
+    get_race_participants,
+    get_rounds_for_race,
+    update_calendar,
+)
 
 
 def test_calendar_lookup():

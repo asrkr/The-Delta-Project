@@ -1,4 +1,5 @@
 import time
+from typing import cast
 import numpy as np
 import pandas as pd
 import requests
@@ -30,7 +31,7 @@ def _get_json(url: str, params: dict | None = None, max_attempts: int = 5) -> di
             continue
 
         if r.status_code == 200:
-            return r.json()
+            return cast(dict, r.json())
         if r.status_code == 429:
             wait = 15 * attempt
             print(f"Requests limit reached (429), pause {wait}s")
@@ -45,7 +46,8 @@ def _fetch_races(path: str, results_key: str) -> list:
     """Browses through the pagination to retrieve all races for
     given season/endpoint."""
     url = f"{API_BASE}/{path}.json"
-    races, offset = {}, 0
+    races: dict[int, dict] = {}
+    offset = 0
     while True:
         mr = _get_json(url, params={"limit": PAGE_LIMIT, "offset": offset})["MRData"]
         for race in mr[f"RaceTable"]["Races"]:

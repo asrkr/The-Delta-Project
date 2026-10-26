@@ -1,7 +1,4 @@
-import re
-import unicodedata
 import pandas as pd
-
 
 # Alias mapping for driver keys across different data sources
 DRIVER_KEY_ALIASES = {
@@ -77,10 +74,10 @@ def ensure_keys(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     if "DriverKey" in out.columns:
         out["DriverKey"] = out["DriverKey"].apply(canonicalize_driver_key)
-    
+
     if "constructorId" in out.columns:
         out["TeamKey"] = out["constructorId"].apply(team_lineage)
     elif "TeamKey" in out.columns:
         out["TeamKey"] = out["TeamKey"].apply(team_lineage)
-    
+
     return out

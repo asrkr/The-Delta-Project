@@ -1,4 +1,4 @@
-from the_delta_project.data.ergast import fetch_race_result, fetch_qualifying_results
+from the_delta_project.data.ergast import fetch_qualifying_results, fetch_race_result
 
 
 def test_fetch_race_result_api():
