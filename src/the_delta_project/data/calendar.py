@@ -1,30 +1,23 @@
 import pandas as pd
-import requests
-import time
+
+from the_delta_project.data.ergast import PAGE_LIMIT, API_BASE, _get_json
 
 
-def fetch_calendar(start_year: int = 2001, end_year: int = 2026) -> pd.DataFrame:
-    """Fetch F1 race calendars for a range of seasons from Ergast API.
-    Returns:
-        pd.DataFrame containing columns [year, round, raceName, circuitId, date].
-    """
-    data = []
-    for year in range(start_year, end_year+1):
-        url = f"https://api.jolpi.ca/ergast/f1/{year}.json"
-        try:
-            r = requests.get(url, timeout=10)
-            races = r.json()["MRData"]["RaceTable"]["Races"]
-            for race in races:
-                data.append({
-                    "year": int(race["season"]),
-                    "round": int(race["round"]),
-                    "raceName": race["raceName"],
-                    "circuitId": race["Circuit"]["circuitId"],
-                    "date": race["date"]
-                })
-        except Exception:
-            pass
+def fetch_season_calendar(year: int) -> pd.DataFrame:
+    """Fetch official race calendar for a single F1 season from Jolpica API."""
+    url = f"{API_BASE}/{year}.json"
+    mr = _get_json(url, params={"limit": PAGE_LIMIT})["MRData"]
 
-        time.sleep(0.5)
+    races = mr.get("RaceTable", {}).get("Races", [])
+    data = [
+        {
+            "year": int(r["season"]),
+            "round": int(r["round"]),
+            "raceName": r["raceName"],
+            "circuitId": r["Circuit"]["circuitId"],
+            "date": r["date"],
+        }
+        for r in races
+    ]
 
     return pd.DataFrame(data)
