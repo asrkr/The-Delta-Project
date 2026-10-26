@@ -3,7 +3,7 @@ import pandas as pd
 from the_delta_project.data.ergast import _entries_to_df, _fetch_races
 
 
-def fetch_season_sprint(year: int) -> pd.DataFrame:
+def fetch_season_sprints(year: int) -> pd.DataFrame:
     """Fetch all sprint race results for a given season from Jolpica API.
     
     Sprint races were introduced in 2021. Returns an empty DataFrame if
