@@ -1,16 +1,19 @@
 import os
 import time
+from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from the_delta_project.data.ergast import fetch_race_result, fetch_qualifying_results
-from the_delta_project.data.calendar import fetch_calendar
-from the_delta_project.data.sprint import fetch_sprint_results
+from the_delta_project.data.calendar import fetch_season_calendar
+from the_delta_project.data.ergast import (
+    PAUSE,
+    fetch_qualifying_results,
+    fetch_season_results,
+)
+from the_delta_project.data.sprint import fetch_season_sprints
 from the_delta_project.utils.keys import ensure_keys
 
-# -------------------------------------------------------------------
-# Absolute paths based on project root
-# -------------------------------------------------------------------
+
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.abspath(os.path.join(CURRENT_DIR, "../../../data"))
 
@@ -20,157 +23,218 @@ SPRINT_RESULTS_CSV_PATH = os.path.join(DATA_DIR, "sprint_results.csv")
 QUALI_RESULTS_CSV_PATH = os.path.join(DATA_DIR, "latest_qualifying.csv")
 
 
-# -------------------------------------------------------------------
-# UPDATES (INCREMENTAL LOGIC)
-# -------------------------------------------------------------------
-def update_race_data(start_year: int = 2001, end_year: int = 2026) -> None:
-    """Download race results from Ergast/Jolpica and save them incrementally to CSV."""
+def _current_year() -> int:
+    """Return the current year."""
+    return datetime.now().year
+
+
+def _save_season(path: str, df_new: pd.DataFrame, years: list[int], sort_cols: list[str]) -> None:
+    """Save newly fetched season DataFrames, replacing existing rows for the given years."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    all_races = []
-
-    for year in range(start_year, end_year+1):
-        cpt = 0
-        for rnd in range(1, 26):
-            url = f"https://api.jolpi.ca/ergast/f1/{year}/{rnd}/results.json"
-            result = fetch_race_result(url)
-
-            if isinstance(result, str) and result == "END_OF_SEASON":
-                break
-            elif isinstance(result, pd.DataFrame) and not result.empty:
-                result["year"] = int(year)
-                result["round"] = int(rnd)
-                all_races.append(result)
-                cpt += 1
-
-            time.sleep(0.5)
-
-    if not all_races:
-        return
-
-    df_new = pd.concat(all_races, ignore_index=True)
-
-    if os.path.exists(RACE_RESULTS_CSV_PATH):
-        df_old = pd.read_csv(RACE_RESULTS_CSV_PATH)
-        # Delete rewritten years to avoid duplicates
-        df_old = df_old[(df_old["year"] < start_year) | (df_old["year"] > end_year)]
-        df_final = pd.concat([df_old, df_new], ignore_index=True)
+    if os.path.exists(path):
+        old = pd.read_csv(path)
+        if len(old) and "constructorId" in df_new.columns and "constructorId" not in old.columns:
+            raise RuntimeError(
+                f"{os.path.basename(path)} is in the old format. Move it and re-run full update."
+            )
+        old = old[~old["year"].isin(years)]
+        df_new = pd.concat([old, df_new], ignore_index=True)
     else:
-        df_final = df_new
-
-    df_final = df_final.sort_values(["year", "round", "grid"])
-    df_final.to_csv(RACE_RESULTS_CSV_PATH, index=False)
-
-
-def update_calendar(start_year: int = 2001, end_year: int = 2026) -> None:
-    """Fetch calendar from Ergast API and save to CSV."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    df = fetch_calendar(start_year, end_year)
-    if not df.empty:
-        df.to_csv(CALENDAR_CSV_PATH, index=False)
+        df_new = df_new
+    
+    df_new.sort_values(sort_cols).to_csv(path, index=False)
 
 
-def update_sprint_dat(start_year: int = 2021, end_year: int = 2026) -> None:
-    """Fetch sprint results and update CSV incrementally"""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    if start_year < 2021:
-        start_year = 2021
+def _update_by_season(label: str, fetch_fn, path: str, start_year: int, end_year: int | None, sort_cols: list[str]) -> bool:
+    """Update dataset season by season, replacing complete seasons to avoid duplicates."""
+    target_end_year = end_year or _current_year()
+    print(f"📌 {label} {start_year}-{end_year}")
+    done, failed = [], []
 
-    all_sprints = []
-    for year in range(start_year, end_year+1):
-        for rnd in range(1, 26):
-            df_sprint = fetch_sprint_results(year, rnd)
-            if df_sprint is not None and not df_sprint.empty:
-                all_sprints.append(df_sprint)
-            time.sleep(0.5)
+    for year in range(start_year, target_end_year + 1):
+        try:
+            df_year = fetch_fn(year)
+        except Exception as e:
+            print(f"❌ {year}: {e} -> kept old data")
+            failed.append(year)
+            continue
 
-    if not all_sprints:
-        return
+        if df_year is None or df_year.empty:
+            print(f"{year}: no data")
+            continue
 
-    df_new = pd.concat(all_sprints, ignore_index=True)
+        _save_season(path, df_year, [year], sort_cols)
+        print(f"{year}: {df_year['round'].nunique()} races ✔️")
+        done.append(year)
+        time.sleep(PAUSE)
+    
+    if failed:
+        print(f"⚠️ Failed seasons: {failed}")
+    elif done:
+        print(f"✔️ Saved -> {path}")
+    
+    return not failed
 
-    if os.path.exists(SPRINT_RESULTS_CSV_PATH):
-        df_old = pd.read_csv(SPRINT_RESULTS_CSV_PATH)
-        df_old = df_old[(df_old["year"] < start_year) | (df_old["year"] > end_year)]
-        df_final = pd.concat([df_old, df_new], ignore_index=True)
-    else:
-        df_final = df_new
 
-    df_final = df_final.sort_values(["year", "round", "sprint_pos"])
-    df_final.to_csv(SPRINT_RESULTS_CSV_PATH, index=False)
+def update_database(start_year: int = 2001, end_year: int | None = None) -> bool:
+    """Fetch and update full race results from Jolpica API."""
+    return _update_by_season(
+        "Ergast race results",
+        fetch_season_results,
+        RACE_RESULTS_CSV_PATH,
+        start_year,
+        end_year,
+        ["year", "round", "position"]
+    )
+
+
+def update_sprint_data(start_year: int = 2021, end_year: int | None = None) -> bool:
+    """Fetch and update sprint race results from Jolpica API."""
+    return _update_by_season(
+        "Ergast sprint results",
+        fetch_season_sprints,
+        SPRINT_RESULTS_CSV_PATH,
+        max(start_year, 2021),
+        end_year,
+        ["year", "round"],
+    )
+
+
+def update_calendar(start_year: int = 2001, end_year: int | None = None) -> bool:
+    """Fetch and update F1 season calendars from Jolpica API."""
+    return _update_by_season(
+        "Calendar",
+        fetch_season_calendar,
+        CALENDAR_CSV_PATH,
+        start_year,
+        end_year,
+        ["year", "round"],
+    )
 
 
 def update_latest_qualifying(year: int, rnd: int) -> bool:
-    """Fetch latest qualifying results for a single race"""
+    """"Fetch latest qualifying results for a single Grand Prix and save to CSV."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    df = fetch_qualifying_results(year, rnd)
+    try:
+        df = fetch_qualifying_results(year, rnd)
+    except Exception as e:
+        print(f"❌ Qualif {year} R{rnd}: {e}")
+        return False
+    
     if df is None or df.empty:
-        return True
+        print(f"❌ No qualifying session found for {year} R{rnd}")
+        return False
+    
     df.to_csv(QUALI_RESULTS_CSV_PATH, index=False)
+    print(f"✔️ Qualifying {year} R{rnd} saved.")
     return True
 
 
-# -------------------------------------------------------------------
-# LOAD + UTILS
-# -------------------------------------------------------------------
 def load_data() -> pd.DataFrame | None:
-    """Load race results dataset and merge calendar (circuitId) and sprint features."""
+    """Load race results dataset and merge calendar and sprint features."""
     if not os.path.exists(RACE_RESULTS_CSV_PATH):
+        print("File not found.")
         return None
-
+    
     df = pd.read_csv(RACE_RESULTS_CSV_PATH)
+    if "constructorId" not in df.columns:
+        print(f"❌ {os.path.basename(RACE_RESULTS_CSV_PATH)} is in old format. Run full update.")
+        return None
+    
     df = ensure_keys(df)
 
-    # Merge circuitId via calendar
-    if os.path.exists(CALENDAR_CSV_PATH):
-        cal = pd.read_csv(CALENDAR_CSV_PATH)
-        if "circuitId" not in df.columns:
-            df = df.merge(cal[["year", "round", "circuitId"]], on=["year", "round"])
-
-    # Merge sprint features
     sprint_cols = ["sprint_pos", "sprint_grid", "sprint_points"]
     if os.path.exists(SPRINT_RESULTS_CSV_PATH):
         try:
             df_sprint = pd.read_csv(SPRINT_RESULTS_CSV_PATH)
-            df_sprint = ensure_keys(df_sprint)
-            cols_to_merge = ["year", "round", "DriverKey"] + [c for c in sprint_cols if c in df_sprint.columns]
+            cols_to_merge = ["year", "round", "DriverKey"] + [
+                c for c in sprint_cols if c in df_sprint.columns
+            ]
             df = df.merge(df_sprint[cols_to_merge], on=["year", "round", "DriverKey"], how="left")
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ Error loading sprint data: {e}")
             for c in sprint_cols:
                 df[c] = np.nan
+    
     else:
         for c in sprint_cols:
             df[c] = np.nan
-
-    return ensure_keys(df)
+    
+    return df
 
 
 def get_rounds_for_race(race_name_keyword: str) -> tuple[dict[int, int], str | None]:
-    """Return a mapping of {year: round} and the official race name for a keyword"""
+    """Return a mapping of {year: round} and official race name matching keyword."""
     if not os.path.exists(CALENDAR_CSV_PATH):
+        print("Caledndar not found. Downloading...")
         update_calendar()
-
+    
     if not os.path.exists(CALENDAR_CSV_PATH):
         return {}, None
-
+    
     df = pd.read_csv(CALENDAR_CSV_PATH)
     filtered = df[df["raceName"].str.contains(race_name_keyword, case=False, na=False)]
 
     if filtered.empty:
+        print(f'No race found with name "{race_name_keyword}"')
         return {}, None
-
+    
     rounds_map = dict(zip(filtered["year"], filtered["round"]))
     official_name = filtered.iloc[0]["raceName"]
+
     return rounds_map, official_name
 
 
-def get_race_participants(df: pd.DataFrame, year: int, rnd: int) -> pd.DataFrame:
-    """Get the participant list for a specific race round."""
+def get_race_participant(df: pd.DataFrame, year: int, rnd: int) -> pd.DataFrame:
+    """Get participant list for a specific race round."""
     r = df[(df["year"] == year) & (df["round"] == rnd)].sort_values("grid")
     if not r.empty:
-        cols = ["DriverKey", "DriverName", "Team", "TeamKey"]
+        cols = ["DriverKey", "Team", "TeamKey"]
         if "grid" in r.columns:
             cols.append("grid")
         cols = [c for c in cols if c in r.columns]
-        out = r[cols].drop_duplicates(subset=["DriverKey"])
+        out = r[cols].drop_duplicates()
         return ensure_keys(out)
+    
+    entry_file = os.path.join(DATA_DIR, f"entry_list_{year}.csv")
+    if os.path.exists(entry_file):
+        entry_df = pd.read_csv(entry_file)
+        return ensure_keys(entry_df)
+    
     return pd.DataFrame()
+
+
+def has_real_qualifying(year: int, rnd: int) -> bool:
+    """Check if real qualifying results exist for a given race round."""
+    if not os.path.exists(QUALI_RESULTS_CSV_PATH):
+        return False
+    try:
+        df_q = pd.read_csv(QUALI_RESULTS_CSV_PATH)
+        if "year" not in df_q.columns or "round" not in df_q.columns:
+            return False
+        mask = (df_q["year"] == year) & (df_q["round"] == rnd)
+        return not df_q[mask].empty
+    except Exception:
+        return False
+
+
+def load_real_qualifying(year: int, rnd: int) -> pd.DataFrame:
+    """Load real qualifying results for a given race round."""
+    if not os.path.exists(QUALI_RESULTS_CSV_PATH):
+        return pd.DataFrame()
+    
+    df_q = pd.read_csv(QUALI_RESULTS_CSV_PATH)
+    df_q = ensure_keys(df_q)
+
+    mask = (df_q["year"] == year) & (df_q["round"] == rnd)
+    quali = df_q[mask].copy()
+
+    cols = [
+        c for c in [
+            "DriverKey", "DriverName",
+            "number", "constructorId",
+            "TeamKey", "Team",
+            "grid", "year", "round",
+        ] if c in quali.columns
+    ]
+    return quali[cols]
