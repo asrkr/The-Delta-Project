@@ -8,6 +8,7 @@ DRIVER_KEY_ALIASES = {
     "a_antonelli": "k_antonelli",
 }
 
+# Team lineage mapping to enforce historical continuity across constructor rebrands
 TEAM_LINEAGE = {
     # Benetton -> Renault -> (Lotus F1) -> Renault -> Alpine
     "benetton": "alpine",
@@ -56,7 +57,7 @@ TEAM_LINEAGE = {
 
 
 def canonicalize_driver_key(raw_key: str) -> str:
-    """Harmonizes driver aliases"""
+    """Normalize and map raw driver keys to canonical aliases."""
     if raw_key is None or pd.isna(raw_key):
         return "unknown"
     s = str(raw_key).strip().lower()
@@ -64,7 +65,7 @@ def canonicalize_driver_key(raw_key: str) -> str:
 
 
 def team_lineage(constructor_id: str) -> str:
-    """Returns team canonical key according to constructorId"""
+    """return the canonical team key based on Jolpica constructorId."""
     if constructor_id is None or pd.isna(constructor_id):
         return "unknown"
     cid = str(constructor_id).strip().lower()
@@ -72,7 +73,7 @@ def team_lineage(constructor_id: str) -> str:
 
 
 def ensure_keys(df: pd.DataFrame) -> pd.DataFrame:
-    """Applies and ensures DriverKey and TeamKey presence for any DataFrame."""
+    """Guarantee the presence and canonicalization of DriverKey and TeamKey columns."""
     out = df.copy()
     if "DriverKey" in out.columns:
         out["DriverKey"] = out["DriverKey"].apply(canonicalize_driver_key)

@@ -7,11 +7,12 @@ from the_delta_project.utils.keys import ensure_keys
 
 API_BASE = "https://api.jolpi.ca/ergast/f1"
 HEADERS = {"User-Agent": "TheDeltaProject (student project)"}
-PAGE_LIMIT = 100        # Maximum limit for one Jolpica page
-PAUSE = 0.35     # ~ 3 requests/s to stay below the API's limit
+PAGE_LIMIT = 100        # Maximum page limit allowed by Jolpica API
+PAUSE = 0.35     # ~3 requests per second to avoid rate limits
 
 
 def _num(value) -> float:
+    """Safely cast value to float, returning np.nan on conversion error."""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -19,12 +20,12 @@ def _num(value) -> float:
 
 
 def _get_json(url: str, params: dict | None = None, max_attempts: int = 5) -> dict:
-    """Performes a GET with multiple retries (raises an exception if everything fails)/"""
+    """Execute GET request with explicit retries. Raises RuntimeError upon failure."""
     for attempt in range(1, max_attempts + 1):
         try:
-            r = requests.get(url, params=params, headers=HEADERS, timeout=15):
+            r = requests.get(url, params=params, headers=HEADERS, timeout=15)
         except requests.RequestException as e:
-            print(f"⚠️ Network error: {e}, attempt {attempt}/{max_attempts}")
+            print(f"⚠️ Network error ({e}), attempt {attempt}/{max_attempts}")
             time.sleep(3 * attempt)
             continue
 
@@ -40,7 +41,7 @@ def _get_json(url: str, params: dict | None = None, max_attempts: int = 5) -> di
     raise RuntimeError(f"GET Failed after {max_attempts} retries: {url}")
 
 
-def _fetch_races(path: str, results_key str) -> list:
+def _fetch_races(path: str, results_key: str) -> list:
     """Browses through the pagination to retrieve all races for
     given season/endpoint."""
     url = f"{API_BASE}/{path}.json"
@@ -52,7 +53,7 @@ def _fetch_races(path: str, results_key str) -> list:
             if rnd in races:
                 races[rnd][results_key].extend(race.get(results_key, []))
             else:
-                race.setdefault(results_key [])
+                race.setdefault(results_key, [])
                 races[rnd] = race
         
         offset += PAGE_LIMIT
@@ -98,4 +99,4 @@ def fetch_qualifying_results(year: int, rnd: int) -> pd.DataFrame | None:
         return None
     df["grid"] = df["position"]
     cols = ["year", "round", "DriverKey", "DriverName", "number", "constructorId", "TeamKey", "Team", "grid"]
-    return df[[c for c in cols if c in df.columns]]
+    return df.filter(items=cols)
