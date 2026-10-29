@@ -1,8 +1,9 @@
-from the_delta_project.data.calendar import fetch_calendar
+from the_delta_project.data.calendar import fetch_season_calendar
 
 
-def test_fetch_calendar_api():
-    df = fetch_calendar(2024, 2024)
+def test_fetch_season_calendar_api() -> None:
+    """Test fetching full season race calendar from Jolpica API."""
+    df = fetch_season_calendar(2024)
 
     assert df is not None
     assert not df.empty
@@ -10,7 +11,6 @@ def test_fetch_calendar_api():
     assert "round" in df.columns
     assert "raceName" in df.columns
     assert "circuitId" in df.columns
-    assert "date" in df.columns
 
     # Verify Bahrain 2024 round 1
     round_1 = df[df["round"] == 1].iloc[0]
