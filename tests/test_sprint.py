@@ -1,16 +1,20 @@
-from the_delta_project.data.sprint import fetch_sprint_results
+from the_delta_project.data.sprint import fetch_season_sprints
 
 
-def test_fetch_sprint_results_before_2021():
-    assert fetch_sprint_results(2020, 1) is None
+def test_fetch_season_sprints_before_2021() -> None:
+    """Verify that seasons prior to 2021 return an empty DataFrame."""
+    df = fetch_season_sprints(2020)
+    assert df is not None
+    assert df.empty
 
 
-def test_fetch_sprint_results_api():
-    # Brazil 2023 (round 20) had a sprint
-    df = fetch_sprint_results(2023, 20)
+def test_fetch_season_sprints_api() -> None:
+    """Test fetching season sprint results from Jolpica API."""
+    df = fetch_season_sprints(2023)
 
     assert df is not None
+    assert not df.empty
     assert "DriverKey" in df.columns
     assert "sprint_pos" in df.columns
-    assert "status" in df.columns
-    assert df.iloc[0]["sprint_pos"] == 1
+    assert "sprint_grid" in df.columns
+    assert "sprint_points" in df.columns
