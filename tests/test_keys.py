@@ -7,7 +7,7 @@ def test_canonicalize_driver_key() -> None:
     """Verify driver key canonicalization and alias resolution."""
     assert canonicalize_driver_key("a_antonelli") == "k_antonelli"
     assert canonicalize_driver_key("leclerc") == "leclerc"
-    assert canonicalize_driver_key("") == "unknown"
+    assert canonicalize_driver_key(None) == "unknown"
 
 
 def test_team_lineage() -> None:
@@ -17,7 +17,7 @@ def test_team_lineage() -> None:
     assert team_lineage("alphatauri") == "rb_junior"
     assert team_lineage("renault") == "alpine"
     assert team_lineage("benetton") == "alpine"
-    assert team_lineage("") == "unknown"
+    assert team_lineage(None) == "unknown"
 
 
 def test_ensure_keys() -> None:
