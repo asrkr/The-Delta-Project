@@ -11,7 +11,6 @@ TEAM_LINEAGE = {
     "benetton": "alpine",
     "renault": "alpine",
     "lotus_f1": "alpine",
-
     # Jordan -> Midland -> Spyker -> Force India -> Racing Point -> Aston Martin
     "jordan": "aston_martin",
     "midland": "aston_martin",
@@ -20,33 +19,26 @@ TEAM_LINEAGE = {
     "force_india": "aston_martin",
     "racing_point": "aston_martin",
     "aston_martin": "aston_martin",
-
     # BAR -> Honda -> Brawn -> Mercedes
     "bar": "mercedes",
     "honda": "mercedes",
     "brawn": "mercedes",
-
     # Sauber family (BMW Sauber / Alfa Romeo / Kick Sauber / Audi)
     "bmw_sauber": "sauber",
     "alfa": "sauber",
     "audi": "sauber",
-
     # Red Bull family
     "jaguar": "red_bull",
-
     # RB junior (Minardi -> Toro Rosso -> AlphaTauri -> RB -> Racing Bulls)
     "minardi": "rb_junior",
     "toro_rosso": "rb_junior",
     "alphatauri": "rb_junior",
     "rb": "rb_junior",
-
     # Virgin -> Marussia -> Manor
     "virgin": "manor",
     "marussia": "manor",
-
     # Lotus Racing -> Caterham
     "lotus_racing": "caterham",
-
     # Misc normalization for modern naming variants
     "haas_f1_team": "haas",
     "haas": "haas",
