@@ -185,16 +185,16 @@ def get_rounds_for_race(race_name_keyword: str) -> tuple[dict[int, int], str | N
     return rounds_map, official_name
 
 
-def get_race_participant(df: pd.DataFrame, year: int, rnd: int) -> pd.DataFrame:
+def get_race_participants(df: pd.DataFrame, year: int, rnd: int) -> pd.DataFrame:
     """Get participant list for a specific race round."""
     r = df[(df["year"] == year) & (df["round"] == rnd)].sort_values("grid")
     if not r.empty:
-        cols = ["DriverKey", "Team", "TeamKey"]
+        r = ensure_keys(r)
         if "grid" in r.columns:
-            cols.append("grid")
-        cols = [c for c in cols if c in r.columns]
-        out = r[cols].drop_duplicates()
-        return ensure_keys(out)
+            r = r.sort_values("grid")
+        cols = ["DriverKey", "Team", "TeamKey", "constructorId", "grid"]
+        final_cols = [c for c in cols if c in r.columns]
+        return r[final_cols].drop_duplicates()
     
     entry_file = os.path.join(DATA_DIR, f"entry_list_{year}.csv")
     if os.path.exists(entry_file):
