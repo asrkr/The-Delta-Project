@@ -7,8 +7,8 @@ from the_delta_project.data.manager import (
 )
 
 
-def test_calendar_lookup():
-    # Force updating calendar for 2024
+def test_calendar_lookup() -> None:
+    """Test race round lookup by Grand Prix name keyword."""
     update_calendar(2024, 2024)
     rounds_map, official_name = get_rounds_for_race("Monaco")
 
@@ -17,12 +17,30 @@ def test_calendar_lookup():
     assert official_name == "Monaco Grand Prix"
 
 
-def test_get_race_participants():
-    # Mock dataframe
-    mock_df = pd.DataFrame([
-        {"year": 2024, "round": 1, "DriverKey": "c_leclerc", "DriverName": "Charles Leclerc", "Team": "Ferrari", "TeamKey": "ferrari", "grid": 2},
-        {"year": 2024, "round": 1, "DriverKey": "m_verstappen", "DriveName": "Max Verstappen", "Team": "Red Bull", "TeamKey": "red_bull", "grid": 1},
-    ])
+def test_get_race_participants() -> None:
+    """Test extraction and key backfilling of race participant lists."""
+    mock_df = pd.DataFrame(
+        [
+            {
+                "year": 2024,
+                "round": 1,
+                "DriverKey": "leclerc",
+                "DriverName": "Charles Leclerc",
+                "Team": "Ferrari",
+                "constructorId": "ferrari",
+                "grid": 2,
+            },
+            {
+                "year": 2024,
+                "round": 1,
+                "DriverKey": "m_verstappen",
+                "DriverName": "Max Verstappen",
+                "Team": "Red Bull",
+                "constructorId": "red_bull",
+                "grid": 1,
+            },
+        ]
+    )
 
     participants = get_race_participants(mock_df, 2024, 1)
     assert len(participants) == 2
