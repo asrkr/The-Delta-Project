@@ -18,8 +18,12 @@ data/fastf1_cache/
 dist/
 *egg-info/
 
-# IDE and OS
+# IDE andœ OS
 .vscode/
 .idea/
 .DS_Store
 EOF
+
+# Debug and code quality tools
+.mypy_cache/
+.ruff_cache/
