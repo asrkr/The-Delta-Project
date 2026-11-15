@@ -9,20 +9,17 @@ __pycache__/
 *.py[cod]
 
 # Data and cache (FastF1, Streamlit)
-data/
-data/fastf1_cache/
+/data/
 .streamlit/
 .pytest_cache/
 
 # Distribution and build
-dist/
 *egg-info/
 
-# IDE andœ OS
+# IDE and OS
 .vscode/
 .idea/
 .DS_Store
-EOF
 
 # Debug and code quality tools
 .mypy_cache/
