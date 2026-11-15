@@ -39,8 +39,6 @@ def _save_season(path: str, df_new: pd.DataFrame, years: list[int], sort_cols: l
             )
         old = old[~old["year"].isin(years)]
         df_new = pd.concat([old, df_new], ignore_index=True)
-    else:
-        df_new = df_new
 
     df_new.sort_values(sort_cols).to_csv(path, index=False)
 
