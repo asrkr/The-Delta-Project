@@ -48,7 +48,7 @@ def _save_season(path: str, df_new: pd.DataFrame, years: list[int], sort_cols: l
 def _update_by_season(label: str, fetch_fn, path: str, start_year: int, end_year: int | None, sort_cols: list[str]) -> bool:
     """Update dataset season by season, replacing complete seasons to avoid duplicates."""
     target_end_year = end_year or _current_year()
-    print(f"📌 {label} {start_year}-{end_year}")
+    print(f"📌 {label} {start_year}-{target_end_year}")
     done, failed = [], []
 
     for year in range(start_year, target_end_year + 1):
