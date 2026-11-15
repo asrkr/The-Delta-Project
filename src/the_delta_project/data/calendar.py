@@ -1,6 +1,6 @@
 import pandas as pd
 
-from the_delta_project.data.ergast import PAGE_LIMIT, API_BASE, _get_json
+from the_delta_project.data.ergast import API_BASE, PAGE_LIMIT, _get_json
 
 
 def fetch_season_calendar(year: int) -> pd.DataFrame:

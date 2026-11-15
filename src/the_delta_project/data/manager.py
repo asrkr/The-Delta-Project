@@ -1,6 +1,7 @@
 import os
 import time
 from datetime import datetime
+
 import numpy as np
 import pandas as pd
 
@@ -12,7 +13,6 @@ from the_delta_project.data.ergast import (
 )
 from the_delta_project.data.sprint import fetch_season_sprints
 from the_delta_project.utils.keys import ensure_keys
-
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.abspath(os.path.join(CURRENT_DIR, "../../../data"))
@@ -41,7 +41,7 @@ def _save_season(path: str, df_new: pd.DataFrame, years: list[int], sort_cols: l
         df_new = pd.concat([old, df_new], ignore_index=True)
     else:
         df_new = df_new
-    
+
     df_new.sort_values(sort_cols).to_csv(path, index=False)
 
 
@@ -67,12 +67,12 @@ def _update_by_season(label: str, fetch_fn, path: str, start_year: int, end_year
         print(f"{year}: {df_year['round'].nunique()} races ✔️")
         done.append(year)
         time.sleep(PAUSE)
-    
+
     if failed:
         print(f"⚠️ Failed seasons: {failed}")
     elif done:
         print(f"✔️ Saved -> {path}")
-    
+
     return not failed
 
 
@@ -120,11 +120,11 @@ def update_latest_qualifying(year: int, rnd: int) -> bool:
     except Exception as e:
         print(f"❌ Qualif {year} R{rnd}: {e}")
         return False
-    
+
     if df is None or df.empty:
         print(f"❌ No qualifying session found for {year} R{rnd}")
         return False
-    
+
     df.to_csv(QUALI_RESULTS_CSV_PATH, index=False)
     print(f"✔️ Qualifying {year} R{rnd} saved.")
     return True
@@ -135,12 +135,12 @@ def load_data() -> pd.DataFrame | None:
     if not os.path.exists(RACE_RESULTS_CSV_PATH):
         print("File not found.")
         return None
-    
+
     df = pd.read_csv(RACE_RESULTS_CSV_PATH)
     if "constructorId" not in df.columns:
         print(f"❌ {os.path.basename(RACE_RESULTS_CSV_PATH)} is in old format. Run full update.")
         return None
-    
+
     df = ensure_keys(df)
 
     sprint_cols = ["sprint_pos", "sprint_grid", "sprint_points"]
@@ -155,11 +155,11 @@ def load_data() -> pd.DataFrame | None:
             print(f"⚠️ Error loading sprint data: {e}")
             for c in sprint_cols:
                 df[c] = np.nan
-    
+
     else:
         for c in sprint_cols:
             df[c] = np.nan
-    
+
     return df
 
 
@@ -168,18 +168,18 @@ def get_rounds_for_race(race_name_keyword: str) -> tuple[dict[int, int], str | N
     if not os.path.exists(CALENDAR_CSV_PATH):
         print("Caledndar not found. Downloading...")
         update_calendar()
-    
+
     if not os.path.exists(CALENDAR_CSV_PATH):
         return {}, None
-    
+
     df = pd.read_csv(CALENDAR_CSV_PATH)
     filtered = df[df["raceName"].str.contains(race_name_keyword, case=False, na=False)]
 
     if filtered.empty:
         print(f'No race found with name "{race_name_keyword}"')
         return {}, None
-    
-    rounds_map = dict(zip(filtered["year"], filtered["round"]))
+
+    rounds_map = dict(zip(filtered["year"], filtered["round"], strict=True))
     official_name = filtered.iloc[0]["raceName"]
 
     return rounds_map, official_name
@@ -195,12 +195,12 @@ def get_race_participants(df: pd.DataFrame, year: int, rnd: int) -> pd.DataFrame
         cols = ["DriverKey", "Team", "TeamKey", "constructorId", "grid"]
         final_cols = [c for c in cols if c in r.columns]
         return r[final_cols].drop_duplicates()
-    
+
     entry_file = os.path.join(DATA_DIR, f"entry_list_{year}.csv")
     if os.path.exists(entry_file):
         entry_df = pd.read_csv(entry_file)
         return ensure_keys(entry_df)
-    
+
     return pd.DataFrame()
 
 
@@ -222,7 +222,7 @@ def load_real_qualifying(year: int, rnd: int) -> pd.DataFrame:
     """Load real qualifying results for a given race round."""
     if not os.path.exists(QUALI_RESULTS_CSV_PATH):
         return pd.DataFrame()
-    
+
     df_q = pd.read_csv(QUALI_RESULTS_CSV_PATH)
     df_q = ensure_keys(df_q)
 

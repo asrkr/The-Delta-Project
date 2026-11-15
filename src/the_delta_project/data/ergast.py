@@ -1,5 +1,6 @@
 import time
 from typing import cast
+
 import numpy as np
 import pandas as pd
 import requests
@@ -38,7 +39,7 @@ def _get_json(url: str, params: dict | None = None, max_attempts: int = 5) -> di
             time.sleep(wait)
         else:
             print(f"⚠️ HTTP {r.status_code}, attempt {attempt}/{max_attempts}")
-    
+
     raise RuntimeError(f"GET Failed after {max_attempts} retries: {url}")
 
 
@@ -50,14 +51,14 @@ def _fetch_races(path: str, results_key: str) -> list:
     offset = 0
     while True:
         mr = _get_json(url, params={"limit": PAGE_LIMIT, "offset": offset})["MRData"]
-        for race in mr[f"RaceTable"]["Races"]:
+        for race in mr["RaceTable"]["Races"]:
             rnd = int(race["round"])
             if rnd in races:
                 races[rnd][results_key].extend(race.get(results_key, []))
             else:
                 race.setdefault(results_key, [])
                 races[rnd] = race
-        
+
         offset += PAGE_LIMIT
         if offset >= int(mr["total"]):
             break
